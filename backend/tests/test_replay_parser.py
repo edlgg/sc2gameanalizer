@@ -30,3 +30,18 @@ def test_extract_game_metadata(test_replay_path):
     assert metadata["opponent_name"] is not None
     assert metadata["player_race"] in ["Protoss", "Terran", "Zerg"]
     assert metadata["opponent_race"] in ["Protoss", "Terran", "Zerg"]
+
+def test_extract_build_events(test_replay_path):
+    parser = ReplayParser()
+    replay = parser.load_replay(test_replay_path)
+    events = parser.extract_build_events(replay, player_index=0)
+
+    assert len(events) > 0
+
+    # Check first event structure
+    first_event = events[0]
+    assert "game_time" in first_event
+    assert "event_type" in first_event
+    assert "name" in first_event
+    assert first_event["event_type"] in ["unit", "building", "upgrade"]
+    assert first_event["game_time"] >= 0
