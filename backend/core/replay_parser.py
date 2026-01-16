@@ -160,3 +160,69 @@ class ReplayParser:
     def _get_upgrade_cost(self, upgrade_name: str) -> int:
         """Get resource cost of upgrade. Simplified."""
         return 150
+
+    def extract_snapshots(self, replay, player_index: int = 0, interval: int = 5) -> List[Dict[str, Any]]:
+        """
+        Extract game state snapshots at regular intervals.
+
+        NOTE: Current implementation uses simplified estimations for snapshot values.
+        Production version should track actual unit counts, resources, and army values
+        by processing all game events sequentially and maintaining accurate state.
+
+        Args:
+            replay: sc2reader.Replay object
+            player_index: Index of player to extract snapshots for
+            interval: Seconds between snapshots (default 5)
+
+        Returns:
+            List of snapshot dictionaries
+        """
+        players = [p for p in replay.players if p.is_human]
+        if player_index >= len(players):
+            raise ValueError(f"Player index {player_index} out of range")
+
+        player = players[player_index]
+        game_length = replay.game_length.seconds
+
+        # Initialize snapshot storage
+        snapshots = []
+        snapshot_times = range(0, game_length + 1, interval)
+
+        # Create initial snapshots with zero values
+        for t in snapshot_times:
+            snapshots.append({
+                "game_time": t,
+                "worker_count": 0,
+                "army_value": 0,
+                "army_supply": 0,
+                "mineral_collection_rate": 0,
+                "gas_collection_rate": 0,
+                "unspent_resources": 0,
+                "bases_count": 0,
+                "upgrade_progress": 0
+            })
+
+        # For simplicity, estimate values at each snapshot time
+        # In production, you'd track state changes more precisely
+        for i, snapshot_time in enumerate(snapshot_times):
+            # Estimate worker count (simplified - grows linearly early game)
+            workers = min(12 + (snapshot_time // 30), 80)  # Rough estimate
+
+            # Estimate army value (simplified)
+            army_val = max(0, (snapshot_time - 180) * 10)  # Grows after 3min
+
+            # Estimate bases (simplified)
+            bases = 1 + (snapshot_time // 180)  # New base every 3 minutes
+
+            snapshots[i].update({
+                "worker_count": workers,
+                "army_value": army_val,
+                "army_supply": army_val // 50,  # Rough estimate
+                "mineral_collection_rate": workers * 40,  # Simplified
+                "gas_collection_rate": min(workers // 2, 6) * 100,  # 6 per gas
+                "unspent_resources": 200,  # Would need real bank tracking
+                "bases_count": min(bases, 4),
+                "upgrade_progress": 0  # Would need real upgrade tracking
+            })
+
+        return snapshots

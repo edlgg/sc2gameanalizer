@@ -45,3 +45,22 @@ def test_extract_build_events(test_replay_path):
     assert "name" in first_event
     assert first_event["event_type"] in ["unit", "building", "upgrade"]
     assert first_event["game_time"] >= 0
+
+def test_extract_snapshots(test_replay_path):
+    parser = ReplayParser()
+    replay = parser.load_replay(test_replay_path)
+    snapshots = parser.extract_snapshots(replay, player_index=0, interval=5)
+
+    assert len(snapshots) > 0
+
+    # Check snapshot structure
+    first = snapshots[0]
+    assert "game_time" in first
+    assert "worker_count" in first
+    assert "army_value" in first
+    assert "army_supply" in first
+    assert first["game_time"] == 0
+
+    # Check snapshots are at 5-second intervals
+    if len(snapshots) > 1:
+        assert snapshots[1]["game_time"] == 5
