@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { analyzeReplay, AnalysisResult } from './api/client';
+import { TimelineChart } from './components/TimelineChart';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -71,6 +72,25 @@ function App() {
               <p>{result.game_metadata.player_name} ({result.game_metadata.player_race}) vs {result.game_metadata.opponent_name} ({result.game_metadata.opponent_race})</p>
               <p>Matchup: {result.game_metadata.matchup}</p>
               <p>Map: {result.game_metadata.map_name}</p>
+            </div>
+
+            {/* Timeline Charts */}
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold mb-4">Performance Comparison</h3>
+
+              <TimelineChart
+                userSnapshots={result.user_snapshots}
+                proSnapshots={result.pro_snapshots}
+                metric="worker_count"
+                title="Worker Count Over Time"
+              />
+
+              <TimelineChart
+                userSnapshots={result.user_snapshots}
+                proSnapshots={result.pro_snapshots}
+                metric="army_value"
+                title="Army Value Over Time"
+              />
             </div>
 
             {/* Recommendations */}
