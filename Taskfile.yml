@@ -1,0 +1,29 @@
+version: '3'
+
+vars:
+  PYTHON: ./venv/bin/python
+  DB_PATH: data/output.db
+  REPLAYS_DIR: data/replays
+
+tasks:
+  generate:
+    desc: Parse all SC2 replays and generate structured dataset
+    cmds:
+      - "{{.PYTHON}} -m src.processor {{.REPLAYS_DIR}} {{.DB_PATH}}"
+
+  db:init:
+    desc: Initialize database schema
+    cmds:
+      - "{{.PYTHON}} -m src.database init {{.DB_PATH}}"
+
+  test:
+    desc: Run test suite
+    cmds:
+      - pytest tests/ -v
+
+  clean:
+    desc: Remove generated files
+    cmds:
+      - rm -f {{.DB_PATH}}
+      - find . -type d -name __pycache__ -exec rm -rf {} +
+      - find . -type d -name .pytest_cache -exec rm -rf {} +
