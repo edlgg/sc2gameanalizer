@@ -1,89 +1,143 @@
-"""Constants for SC2 replay parsing - unit costs, race mappings, etc."""
+"""
+Constants for SC2 unit costs, races, and game definitions.
+"""
 
-# Worker units across all races
-WORKER_UNITS = ["Probe", "SCV", "Drone"]
-
-# Base buildings across all races
-BASE_BUILDINGS = [
-    "Nexus",
-    "CommandCenter", "OrbitalCommand", "PlanetaryFortress",
-    "Hatchery", "Lair", "Hive"
-]
-
-# Unit costs (mineral + gas cost)
-# Format: "UnitName": (minerals, gas)
+# Unit costs: minerals, gas, supply
 UNIT_COSTS = {
     # Terran Units
-    "SCV": (50, 0),
-    "Marine": (50, 0),
-    "Marauder": (100, 25),
-    "Reaper": (50, 50),
-    "Ghost": (150, 125),
-    "Hellion": (100, 0),
-    "Hellbat": (100, 0),
-    "WidowMine": (75, 25),
-    "Cyclone": (150, 100),
-    "SiegeTank": (150, 125),
-    "Thor": (300, 200),
-    "Viking": (150, 75),
-    "Medivac": (100, 100),
-    "Liberator": (150, 150),
-    "Raven": (100, 200),
-    "Banshee": (150, 100),
-    "Battlecruiser": (400, 300),
+    'Marine': {'minerals': 50, 'gas': 0, 'supply': 1},
+    'Marauder': {'minerals': 100, 'gas': 25, 'supply': 2},
+    'Reaper': {'minerals': 50, 'gas': 50, 'supply': 1},
+    'Ghost': {'minerals': 150, 'gas': 125, 'supply': 2},
+    'Hellion': {'minerals': 100, 'gas': 0, 'supply': 2},
+    'Hellbat': {'minerals': 100, 'gas': 0, 'supply': 2},
+    'WidowMine': {'minerals': 75, 'gas': 25, 'supply': 2},
+    'Cyclone': {'minerals': 150, 'gas': 100, 'supply': 3},
+    'SiegeTank': {'minerals': 150, 'gas': 125, 'supply': 3},
+    'Thor': {'minerals': 300, 'gas': 200, 'supply': 6},
+    'Viking': {'minerals': 150, 'gas': 75, 'supply': 2},
+    'Medivac': {'minerals': 100, 'gas': 100, 'supply': 2},
+    'Liberator': {'minerals': 150, 'gas': 150, 'supply': 3},
+    'Raven': {'minerals': 100, 'gas': 200, 'supply': 2},
+    'Banshee': {'minerals': 150, 'gas': 100, 'supply': 3},
+    'Battlecruiser': {'minerals': 400, 'gas': 300, 'supply': 6},
+    'SCV': {'minerals': 50, 'gas': 0, 'supply': 1},
 
     # Protoss Units
-    "Probe": (50, 0),
-    "Zealot": (100, 0),
-    "Stalker": (125, 50),
-    "Sentry": (50, 100),
-    "Adept": (100, 25),
-    "HighTemplar": (50, 150),
-    "DarkTemplar": (125, 125),
-    "Immortal": (275, 100),
-    "Colossus": (300, 200),
-    "Disruptor": (150, 150),
-    "Archon": (0, 0),  # Merged from templars
-    "Observer": (25, 75),
-    "WarpPrism": (200, 0),
-    "Phoenix": (150, 100),
-    "VoidRay": (250, 150),
-    "Oracle": (150, 150),
-    "Tempest": (300, 200),
-    "Carrier": (350, 250),
-    "Mothership": (400, 400),
+    'Probe': {'minerals': 50, 'gas': 0, 'supply': 1},
+    'Zealot': {'minerals': 100, 'gas': 0, 'supply': 2},
+    'Stalker': {'minerals': 125, 'gas': 50, 'supply': 2},
+    'Sentry': {'minerals': 50, 'gas': 100, 'supply': 2},
+    'Adept': {'minerals': 100, 'gas': 25, 'supply': 2},
+    'HighTemplar': {'minerals': 50, 'gas': 150, 'supply': 2},
+    'DarkTemplar': {'minerals': 125, 'gas': 125, 'supply': 2},
+    'Archon': {'minerals': 175, 'gas': 275, 'supply': 4},  # Average of merge costs
+    'Observer': {'minerals': 25, 'gas': 75, 'supply': 1},
+    'WarpPrism': {'minerals': 200, 'gas': 0, 'supply': 2},
+    'Immortal': {'minerals': 275, 'gas': 100, 'supply': 4},
+    'Colossus': {'minerals': 300, 'gas': 200, 'supply': 6},
+    'Disruptor': {'minerals': 150, 'gas': 150, 'supply': 3},
+    'Phoenix': {'minerals': 150, 'gas': 100, 'supply': 2},
+    'VoidRay': {'minerals': 250, 'gas': 150, 'supply': 4},
+    'Oracle': {'minerals': 150, 'gas': 150, 'supply': 3},
+    'Tempest': {'minerals': 250, 'gas': 175, 'supply': 4},
+    'Carrier': {'minerals': 350, 'gas': 250, 'supply': 6},
+    'Mothership': {'minerals': 400, 'gas': 400, 'supply': 8},
 
     # Zerg Units
-    "Drone": (50, 0),
-    "Queen": (150, 0),
-    "Zergling": (25, 0),
-    "Baneling": (25, 25),
-    "Roach": (75, 25),
-    "Ravager": (100, 100),
-    "Hydralisk": (100, 50),
-    "Lurker": (200, 100),
-    "Infestor": (100, 150),
-    "SwarmHost": (100, 75),
-    "Ultralisk": (300, 200),
-    "Overlord": (100, 0),
-    "Overseer": (50, 50),
-    "Mutalisk": (100, 100),
-    "Corruptor": (150, 100),
-    "BroodLord": (300, 250),
-    "Viper": (100, 200),
+    'Drone': {'minerals': 50, 'gas': 0, 'supply': 1},
+    'Overlord': {'minerals': 100, 'gas': 0, 'supply': 0},
+    'Overseer': {'minerals': 150, 'gas': 50, 'supply': 0},  # Overlord + morph cost
+    'Zergling': {'minerals': 25, 'gas': 0, 'supply': 0.5},  # 50 minerals for 2 zerglings
+    'Baneling': {'minerals': 50, 'gas': 25, 'supply': 0.5},  # Zergling + morph cost
+    'Roach': {'minerals': 75, 'gas': 25, 'supply': 2},
+    'Ravager': {'minerals': 100, 'gas': 100, 'supply': 3},
+    'Hydralisk': {'minerals': 100, 'gas': 50, 'supply': 2},
+    'Lurker': {'minerals': 200, 'gas': 150, 'supply': 3},
+    'Infestor': {'minerals': 100, 'gas': 150, 'supply': 2},
+    'SwarmHost': {'minerals': 100, 'gas': 75, 'supply': 3},
+    'Ultralisk': {'minerals': 300, 'gas': 200, 'supply': 6},
+    'Queen': {'minerals': 150, 'gas': 0, 'supply': 2},
+    'Mutalisk': {'minerals': 100, 'gas': 100, 'supply': 2},
+    'Corruptor': {'minerals': 150, 'gas': 100, 'supply': 2},
+    'BroodLord': {'minerals': 300, 'gas': 250, 'supply': 4},  # Corruptor + morph cost
+    'Viper': {'minerals': 100, 'gas': 200, 'supply': 3},
 }
 
-def get_unit_cost(unit_name: str) -> int:
-    """Get total cost (minerals + gas) for a unit."""
-    if unit_name in UNIT_COSTS:
-        minerals, gas = UNIT_COSTS[unit_name]
-        return minerals + gas
-    return 0
+# Worker units for each race
+WORKER_UNITS = {'SCV', 'Probe', 'Drone'}
 
-def is_worker(unit_name: str) -> bool:
-    """Check if a unit is a worker."""
-    return unit_name in WORKER_UNITS
+# Base buildings (town halls)
+BASE_BUILDINGS = {
+    # Terran
+    'CommandCenter', 'OrbitalCommand', 'PlanetaryFortress',
+    # Protoss
+    'Nexus',
+    # Zerg
+    'Hatchery', 'Lair', 'Hive'
+}
 
-def is_base_building(building_name: str) -> bool:
-    """Check if a building is a base (Nexus/CC/Hatchery)."""
-    return building_name in BASE_BUILDINGS
+# Building costs (for buildings we might want to track)
+BUILDING_COSTS = {
+    # Terran
+    'CommandCenter': {'minerals': 400, 'gas': 0},
+    'OrbitalCommand': {'minerals': 550, 'gas': 0},  # CC + upgrade
+    'PlanetaryFortress': {'minerals': 550, 'gas': 150},
+    'SupplyDepot': {'minerals': 100, 'gas': 0},
+    'Refinery': {'minerals': 75, 'gas': 0},
+    'Barracks': {'minerals': 150, 'gas': 0},
+    'Factory': {'minerals': 150, 'gas': 100},
+    'Starport': {'minerals': 150, 'gas': 100},
+    'EngineeringBay': {'minerals': 125, 'gas': 0},
+    'Armory': {'minerals': 150, 'gas': 100},
+    'Bunker': {'minerals': 100, 'gas': 0},
+    'MissileTurret': {'minerals': 100, 'gas': 0},
+
+    # Protoss
+    'Nexus': {'minerals': 400, 'gas': 0},
+    'Pylon': {'minerals': 100, 'gas': 0},
+    'Assimilator': {'minerals': 75, 'gas': 0},
+    'Gateway': {'minerals': 150, 'gas': 0},
+    'WarpGate': {'minerals': 150, 'gas': 0},
+    'CyberneticsCore': {'minerals': 150, 'gas': 0},
+    'Forge': {'minerals': 150, 'gas': 0},
+    'RoboticsFacility': {'minerals': 200, 'gas': 100},
+    'Stargate': {'minerals': 150, 'gas': 150},
+    'TwilightCouncil': {'minerals': 150, 'gas': 100},
+    'TemplarArchive': {'minerals': 150, 'gas': 200},
+    'DarkShrine': {'minerals': 150, 'gas': 150},
+    'RoboticsBay': {'minerals': 200, 'gas': 200},
+    'FleetBeacon': {'minerals': 300, 'gas': 200},
+    'PhotonCannon': {'minerals': 150, 'gas': 0},
+
+    # Zerg
+    'Hatchery': {'minerals': 300, 'gas': 0},
+    'Lair': {'minerals': 450, 'gas': 100},  # Hatchery + upgrade
+    'Hive': {'minerals': 650, 'gas': 250},  # Lair + upgrade
+    'Extractor': {'minerals': 25, 'gas': 0},
+    'SpawningPool': {'minerals': 200, 'gas': 0},
+    'RoachWarren': {'minerals': 150, 'gas': 0},
+    'BanelingNest': {'minerals': 100, 'gas': 50},
+    'EvolutionChamber': {'minerals': 75, 'gas': 0},
+    'HydraliskDen': {'minerals': 100, 'gas': 100},
+    'LurkerDen': {'minerals': 150, 'gas': 150},
+    'Spire': {'minerals': 200, 'gas': 200},
+    'GreaterSpire': {'minerals': 300, 'gas': 350},  # Spire + upgrade
+    'InfestationPit': {'minerals': 100, 'gas': 100},
+    'UltraliskCavern': {'minerals': 150, 'gas': 200},
+    'SpineCrawler': {'minerals': 100, 'gas': 0},
+    'SporeCrawler': {'minerals': 75, 'gas': 0},
+}
+
+# Sight ranges for vision calculation (approximate)
+SIGHT_RANGES = {
+    'Marine': 11,
+    'Stalker': 10,
+    'Zergling': 8,
+    'Observer': 11,
+    'Overlord': 11,
+    # Add more as needed
+}
+
+# Default sight range for units not specified
+DEFAULT_SIGHT_RANGE = 9

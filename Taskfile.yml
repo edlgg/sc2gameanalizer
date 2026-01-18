@@ -1,29 +1,60 @@
 version: '3'
 
-vars:
-  PYTHON: ./venv/bin/python
-  DB_PATH: data/output.db
-  REPLAYS_DIR: data/replays
-
 tasks:
+  # Database generation
   generate:
-    desc: Parse all SC2 replays and generate structured dataset
+    desc: Generate snapshot database from all replays
     cmds:
-      - "{{.PYTHON}} -m src.processor {{.REPLAYS_DIR}} {{.DB_PATH}}"
+      - uv run python -m src.generate
 
-  db:init:
-    desc: Initialize database schema
+  validate:
+    desc: Validate generated snapshot database
     cmds:
-      - "{{.PYTHON}} -m src.database init {{.DB_PATH}}"
+      - uv run python -m src.validate
+    deps:
+      - generate
 
+  # Development servers
+  backend:
+    desc: Run FastAPI backend server
+    dir: .
+    cmds:
+      - uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+  frontend:
+    desc: Run React frontend dev server
+    dir: frontend
+    cmds:
+      - npm run dev --host
+
+  # Testing
   test:
-    desc: Run test suite
+    desc: Run tests with pytest
     cmds:
-      - pytest tests/ -v
+      - uv run pytest tests/ -v
+
+  # Database management
+  init-db:
+    desc: Initialize database (creates tables)
+    cmds:
+      - uv run python -c "from src.database import init_database; from pathlib import Path; init_database(Path('data/replays.db'))"
 
   clean:
-    desc: Remove generated files
+    desc: Remove generated databases
     cmds:
-      - rm -f {{.DB_PATH}}
-      - find . -type d -name __pycache__ -exec rm -rf {} +
-      - find . -type d -name .pytest_cache -exec rm -rf {} +
+      - rm -f data/snapshots.db
+      - rm -f data/replays.db
+
+  # Setup
+  install:
+    desc: Install all dependencies (Python + Node)
+    cmds:
+      - uv pip install -r requirements.txt
+      - cd frontend && npm install
+
+  # Build for production
+  build:
+    desc: Build frontend for production
+    dir: frontend
+    cmds:
+      - npm run build

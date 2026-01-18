@@ -1,0 +1,14 @@
+[project]
+name = "sc2gameanalizer"
+version = "0.1.0"
+description = "SC2 Replay Parser and Analyzer"
+requires-python = ">=3.13"
+dependencies = [
+    "sc2reader>=1.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov",
+]
