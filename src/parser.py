@@ -6,8 +6,38 @@ from pathlib import Path
 from typing import Dict, Any, List
 import sc2reader
 
-from src.database import insert_game, insert_snapshots
+from src.database import (
+    insert_game,
+    insert_snapshots,
+    insert_build_order_events,
+    delete_game_by_replay_file,
+)
 from src.snapshot import GameState
+from src.build_order import extract_build_order_events
+
+
+def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
+    """
+    Delete existing game data and reparse a replay file.
+
+    Args:
+        replay_path: Path to the SC2Replay file
+        db_path: Path to the SQLite database
+
+    Raises:
+        ValueError: If replay is not valid (not 1v1, too short, etc.)
+    """
+    # Delete existing game data if it exists
+    conn = sqlite3.connect(db_path)
+    try:
+        deleted = delete_game_by_replay_file(conn, replay_path.name)
+        if deleted:
+            print(f"Deleted existing game data for {replay_path.name}")
+    finally:
+        conn.close()
+
+    # Parse the replay file
+    parse_replay_file(replay_path, db_path)
 
 
 def parse_replay_file(replay_path: Path, db_path: Path) -> None:
@@ -33,6 +63,15 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     if game_length_seconds < 60:
         raise ValueError(f"Game too short ({game_length_seconds}s < 60s)")
 
+    # Validate: must not be against AI/Computer
+    players = list(replay.players)
+    ai_patterns = ['A.I.', 'ИИ', 'Cheater', 'Computer', 'Bot', 'IA ', 'I.A.', 'KI ']
+    for player in players:
+        player_name = player.name
+        for pattern in ai_patterns:
+            if pattern in player_name:
+                raise ValueError(f"Game against AI/Computer: {player_name}")
+
     # Extract game metadata
     game_data = extract_game_metadata(replay, replay_path)
 
@@ -44,6 +83,22 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     try:
         game_id = insert_game(conn, game_data)
         insert_snapshots(conn, game_id, snapshots)
+
+        # Extract and insert build order events for both players
+        for player_num in [1, 2]:
+            # Filter snapshots for this player
+            player_snapshots = [s for s in snapshots if s['player_number'] == player_num]
+
+            if player_snapshots:
+                # Get race from first snapshot
+                race = player_snapshots[0]['race']
+
+                # Extract build order events
+                events = extract_build_order_events(player_snapshots, race)
+
+                # Insert into database
+                if events:
+                    insert_build_order_events(conn, game_id, player_num, events)
     finally:
         conn.close()
 
@@ -79,6 +134,10 @@ def extract_game_metadata(replay, replay_path: Path) -> Dict[str, Any]:
     if result is None:
         result = 1
 
+    # Determine if this is a pro replay
+    # Pro replays are downloaded from spawningtool.com and have names like "replay_12345.SC2Replay"
+    is_pro_replay = replay_path.name.startswith('replay_')
+
     return {
         'replay_file': replay_path.name,
         'game_date': replay.date if hasattr(replay, 'date') else None,
@@ -94,7 +153,8 @@ def extract_game_metadata(replay, replay_path: Path) -> Dict[str, Any]:
         'player1_race': players[0].play_race,
         'player2_name': players[1].name,
         'player2_race': players[1].play_race,
-        'result': result
+        'result': result,
+        'is_pro_replay': is_pro_replay
     }
 
 

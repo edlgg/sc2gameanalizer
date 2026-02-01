@@ -8,7 +8,7 @@ import type { Snapshot, ChartDataPoint, KeyMoment, DeltaPoint } from '../types';
  */
 export function formatTime(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const secs = Math.floor(seconds) % 60;
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }
 
@@ -90,22 +90,27 @@ export function mergeSnapshotsForComparison(
 export function calculateDelta(
   userSnapshots: Snapshot[],
   proSnapshots: Snapshot[],
-  valueKey: keyof Snapshot
+  valueKey: keyof Snapshot,
+  maxTime?: number // Optional: trim data to this time
 ): DeltaPoint[] {
   const deltaPoints: DeltaPoint[] = [];
 
-  // Create time-indexed maps
+  // Create time-indexed maps (filter by maxTime if specified)
   const userMap = new Map(
-    userSnapshots.map((s) => [s.game_time_seconds, s[valueKey] as number])
+    userSnapshots
+      .filter(s => !maxTime || s.game_time_seconds <= maxTime)
+      .map((s) => [s.game_time_seconds, s[valueKey] as number])
   );
   const proMap = new Map(
-    proSnapshots.map((s) => [s.game_time_seconds, s[valueKey] as number])
+    proSnapshots
+      .filter(s => !maxTime || s.game_time_seconds <= maxTime)
+      .map((s) => [s.game_time_seconds, s[valueKey] as number])
   );
 
-  // Find common time points
+  // Find common time points (filtered by maxTime)
   const allTimes = new Set([
-    ...userSnapshots.map((s) => s.game_time_seconds),
-    ...proSnapshots.map((s) => s.game_time_seconds),
+    ...userSnapshots.filter(s => !maxTime || s.game_time_seconds <= maxTime).map((s) => s.game_time_seconds),
+    ...proSnapshots.filter(s => !maxTime || s.game_time_seconds <= maxTime).map((s) => s.game_time_seconds),
   ]);
 
   allTimes.forEach((time) => {
@@ -145,7 +150,7 @@ export function extractKeyMoments(
     if (!userSnap || !proSnap) return;
 
     // Worker count comparison
-    const workerDiff = userSnap.worker_count - proSnap.worker_count;
+    const workerDiff = Math.round(userSnap.worker_count) - Math.round(proSnap.worker_count);
     if (Math.abs(workerDiff) > 3) {
       moments.push({
         time: targetTime,
@@ -154,8 +159,8 @@ export function extractKeyMoments(
           workerDiff < 0
             ? `You were ${Math.abs(workerDiff)} workers behind`
             : `You were ${workerDiff} workers ahead`,
-        userValue: userSnap.worker_count,
-        proValue: proSnap.worker_count,
+        userValue: Math.round(userSnap.worker_count),
+        proValue: Math.round(proSnap.worker_count),
         difference: workerDiff,
         type: 'workers',
       });
@@ -163,8 +168,8 @@ export function extractKeyMoments(
 
     // Army value comparison (after 6min)
     if (targetTime >= 360) {
-      const userArmy = userSnap.army_value_minerals + userSnap.army_value_gas;
-      const proArmy = proSnap.army_value_minerals + proSnap.army_value_gas;
+      const userArmy = Math.round(userSnap.army_value_minerals + userSnap.army_value_gas);
+      const proArmy = Math.round(proSnap.army_value_minerals + proSnap.army_value_gas);
       const armyDiff = userArmy - proArmy;
 
       if (Math.abs(armyDiff) > 500) {
@@ -185,7 +190,9 @@ export function extractKeyMoments(
 
     // Base count comparison (after 6min)
     if (targetTime >= 360) {
-      const baseDiff = userSnap.base_count - proSnap.base_count;
+      const userBases = Math.round(userSnap.base_count);
+      const proBases = Math.round(proSnap.base_count);
+      const baseDiff = userBases - proBases;
       if (baseDiff !== 0) {
         moments.push({
           time: targetTime,
@@ -194,8 +201,8 @@ export function extractKeyMoments(
             baseDiff < 0
               ? `You were ${Math.abs(baseDiff)} ${Math.abs(baseDiff) === 1 ? 'base' : 'bases'} behind`
               : `You were ${baseDiff} ${baseDiff === 1 ? 'base' : 'bases'} ahead`,
-          userValue: userSnap.base_count,
-          proValue: proSnap.base_count,
+          userValue: userBases,
+          proValue: proBases,
           difference: baseDiff,
           type: 'bases',
         });
@@ -244,4 +251,283 @@ export function calculatePerformanceScore(userSnap: Snapshot, proSnap: Snapshot)
   score -= Math.max(0, 25 * (1 - baseRatio));
 
   return Math.max(0, Math.round(score));
+}
+
+/**
+ * Calculate average snapshot values across multiple pro games
+ */
+export function calculateAverageSnapshots(proSnapshotSets: Snapshot[][]): Snapshot[] {
+  if (proSnapshotSets.length === 0) return [];
+  if (proSnapshotSets.length === 1) return proSnapshotSets[0];
+
+  // Collect all unique timestamps
+  const allTimes = new Set<number>();
+  proSnapshotSets.forEach(snapshots => {
+    snapshots.forEach(snap => allTimes.add(snap.game_time_seconds));
+  });
+
+  const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
+
+  // For each timestamp, average all numeric metrics across pro games
+  return sortedTimes.map(time => {
+    const snapshotsAtTime = proSnapshotSets
+      .map(snapshots => findClosestSnapshot(snapshots, time))
+      .filter((snap): snap is Snapshot => snap !== null);
+
+    if (snapshotsAtTime.length === 0) {
+      // Return empty snapshot if no data
+      return {
+        game_time_seconds: time,
+        worker_count: 0,
+        army_value_minerals: 0,
+        army_value_gas: 0,
+        base_count: 0,
+        unspent_minerals: 0,
+        unspent_gas: 0,
+        spending_efficiency: 0,
+      } as Snapshot;
+    }
+
+    // Average all numeric fields
+    const avgSnap: any = {
+      game_time_seconds: time,
+      player_number: 1,
+      race: snapshotsAtTime[0].race,
+    };
+
+    // List of numeric fields to average
+    const numericFields: (keyof Snapshot)[] = [
+      'worker_count',
+      'mineral_collection_rate',
+      'gas_collection_rate',
+      'unspent_minerals',
+      'unspent_gas',
+      'total_minerals_collected',
+      'total_gas_collected',
+      'army_value_minerals',
+      'army_value_gas',
+      'army_supply',
+      'base_count',
+      'vision_area',
+      'units_killed_value',
+      'units_lost_value',
+      'resources_spent_minerals',
+      'resources_spent_gas',
+      'collection_efficiency',
+      'spending_efficiency',
+    ];
+
+    numericFields.forEach(field => {
+      const values = snapshotsAtTime.map(snap => snap[field] as number).filter(v => v !== undefined);
+      avgSnap[field] = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
+    });
+
+    // Aggregate JSON fields (units, buildings, upgrades)
+
+    // 1. Aggregate units - average counts across all pro games
+    const allUnits = new Map<string, number[]>();
+    snapshotsAtTime.forEach(snap => {
+      let unitCounts: { [key: string]: number } = {};
+      if (snap.units) {
+        unitCounts = typeof snap.units === 'string' ? JSON.parse(snap.units) : snap.units;
+      }
+      Object.entries(unitCounts || {}).forEach(([unitName, count]) => {
+        if (!allUnits.has(unitName)) {
+          allUnits.set(unitName, []);
+        }
+        allUnits.get(unitName)!.push(count as number);
+      });
+    });
+
+    const avgUnits: { [key: string]: number } = {};
+    allUnits.forEach((counts, unitName) => {
+      avgUnits[unitName] = Math.round(counts.reduce((sum, c) => sum + c, 0) / counts.length);
+    });
+    avgSnap.units = avgUnits;
+
+    // 2. Aggregate buildings - average counts across all pro games
+    const allBuildings = new Map<string, number[]>();
+    snapshotsAtTime.forEach(snap => {
+      let buildingCounts: { [key: string]: number } = {};
+      if (snap.buildings) {
+        buildingCounts = typeof snap.buildings === 'string' ? JSON.parse(snap.buildings) : snap.buildings;
+      }
+      Object.entries(buildingCounts || {}).forEach(([buildingName, count]) => {
+        if (!allBuildings.has(buildingName)) {
+          allBuildings.set(buildingName, []);
+        }
+        allBuildings.get(buildingName)!.push(count as number);
+      });
+    });
+
+    const avgBuildings: { [key: string]: number } = {};
+    allBuildings.forEach((counts, buildingName) => {
+      avgBuildings[buildingName] = Math.round(counts.reduce((sum, c) => sum + c, 0) / counts.length);
+    });
+    avgSnap.buildings = avgBuildings;
+
+    // 3. Aggregate upgrades - merge all unique upgrades from any pro game
+    const allUpgrades = new Set<string>();
+    snapshotsAtTime.forEach(snap => {
+      let upgradesObj: Record<string, any> = {};
+      if (snap.upgrades) {
+        upgradesObj = typeof snap.upgrades === 'string' ? JSON.parse(snap.upgrades) : snap.upgrades;
+      }
+      // Upgrades are stored as {"UpgradeName": true}, extract keys
+      Object.keys(upgradesObj || {}).forEach(upgrade => allUpgrades.add(upgrade));
+    });
+
+    // Convert back to Record<string, boolean> format for consistency
+    const avgUpgrades: Record<string, boolean> = {};
+    allUpgrades.forEach(upgrade => {
+      avgUpgrades[upgrade] = true;
+    });
+    avgSnap.upgrades = avgUpgrades;
+
+    return avgSnap as Snapshot;
+  });
+}
+
+/**
+ * Calculate min/max range for each metric at each timestamp
+ */
+export function calculateSnapshotRanges(
+  proSnapshotSets: Snapshot[][]
+): { min: Snapshot[], max: Snapshot[] } {
+  if (proSnapshotSets.length === 0) return { min: [], max: [] };
+  if (proSnapshotSets.length === 1) return { min: proSnapshotSets[0], max: proSnapshotSets[0] };
+
+  // Collect all unique timestamps
+  const allTimes = new Set<number>();
+  proSnapshotSets.forEach(snapshots => {
+    snapshots.forEach(snap => allTimes.add(snap.game_time_seconds));
+  });
+
+  const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
+
+  const minSnapshots: Snapshot[] = [];
+  const maxSnapshots: Snapshot[] = [];
+
+  // For each timestamp, find min/max across all pro games
+  sortedTimes.forEach(time => {
+    const snapshotsAtTime = proSnapshotSets
+      .map(snapshots => findClosestSnapshot(snapshots, time))
+      .filter((snap): snap is Snapshot => snap !== null);
+
+    if (snapshotsAtTime.length === 0) return;
+
+    const numericFields: (keyof Snapshot)[] = [
+      'worker_count',
+      'mineral_collection_rate',
+      'gas_collection_rate',
+      'unspent_minerals',
+      'unspent_gas',
+      'total_minerals_collected',
+      'total_gas_collected',
+      'army_value_minerals',
+      'army_value_gas',
+      'army_supply',
+      'base_count',
+      'vision_area',
+      'units_killed_value',
+      'units_lost_value',
+      'resources_spent_minerals',
+      'resources_spent_gas',
+      'collection_efficiency',
+      'spending_efficiency',
+    ];
+
+    const minSnap: any = {
+      game_time_seconds: time,
+      player_number: 1,
+      race: snapshotsAtTime[0].race,
+    };
+
+    const maxSnap: any = {
+      game_time_seconds: time,
+      player_number: 1,
+      race: snapshotsAtTime[0].race,
+    };
+
+    numericFields.forEach(field => {
+      const values = snapshotsAtTime.map(snap => snap[field] as number).filter(v => v !== undefined);
+      if (values.length > 0) {
+        minSnap[field] = Math.min(...values);
+        maxSnap[field] = Math.max(...values);
+      } else {
+        minSnap[field] = 0;
+        maxSnap[field] = 0;
+      }
+    });
+
+    minSnapshots.push(minSnap as Snapshot);
+    maxSnapshots.push(maxSnap as Snapshot);
+  });
+
+  return { min: minSnapshots, max: maxSnapshots };
+}
+
+/**
+ * Merge user data with aggregated pro data for charts
+ * Includes individual pro game values for low-level comparison
+ */
+export function mergeWithMultipleProGames(
+  userSnapshots: Snapshot[],
+  proSnapshotSets: Snapshot[][],
+  proGameIds: number[],
+  valueKey: keyof Snapshot,
+  maxTime?: number // Optional: trim data to this time
+): ChartDataPoint[] {
+  const avgProSnapshots = calculateAverageSnapshots(proSnapshotSets);
+  const ranges = calculateSnapshotRanges(proSnapshotSets);
+
+  const timeMap = new Map<number, ChartDataPoint>();
+
+  // Collect all unique timestamps (up to maxTime if specified)
+  const allTimes = new Set<number>();
+  userSnapshots.forEach(s => {
+    if (!maxTime || s.game_time_seconds <= maxTime) {
+      allTimes.add(s.game_time_seconds);
+    }
+  });
+  proSnapshotSets.forEach(snapshots => {
+    snapshots.forEach(s => {
+      if (!maxTime || s.game_time_seconds <= maxTime) {
+        allTimes.add(s.game_time_seconds);
+      }
+    });
+  });
+
+  // For each timestamp, collect all data
+  Array.from(allTimes).forEach(time => {
+    const userSnap = findClosestSnapshot(userSnapshots, time);
+    const avgSnap = findClosestSnapshot(avgProSnapshots, time);
+    const minSnap = ranges.min.find(s => s.game_time_seconds === time);
+    const maxSnap = ranges.max.find(s => s.game_time_seconds === time);
+
+    // Collect individual pro game values
+    const proGames: { [gameId: string]: number } = {};
+    proSnapshotSets.forEach((snapshots, index) => {
+      const proSnap = findClosestSnapshot(snapshots, time);
+      if (proSnap && proGameIds[index]) {
+        proGames[`pro${proGameIds[index]}`] = proSnap[valueKey] as number;
+      }
+    });
+
+    const avgValue = avgSnap ? avgSnap[valueKey] as number : undefined;
+
+    timeMap.set(time, {
+      time,
+      timeFormatted: formatTime(time),
+      value: userSnap ? userSnap[valueKey] as number : 0,
+      value2: avgValue,  // Backward compatibility
+      proAvg: avgValue,
+      proMin: minSnap ? minSnap[valueKey] as number : undefined,
+      proMax: maxSnap ? maxSnap[valueKey] as number : undefined,
+      proGames: Object.keys(proGames).length > 0 ? proGames : undefined,
+    });
+  });
+
+  // Convert to array and sort by time
+  return Array.from(timeMap.values()).sort((a, b) => a.time - b.time);
 }

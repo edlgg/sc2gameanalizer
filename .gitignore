@@ -5,7 +5,37 @@ __pycache__/
 *.db
 .pytest_cache/
 venv/
+.venv/
 .env
 *.egg-info/
 dist/
 build/
+
+# ML cache files
+*.pkl
+data/.embeddings_cache.pkl
+
+# Playwright test artifacts
+.playwright-mcp/
+test-results/
+
+# Log files
+*.log
+backend.log
+playwright-validation.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+data/

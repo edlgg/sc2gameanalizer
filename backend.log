@@ -1,17 +1,291 @@
-kill: invalid argument m
-
-Usage:
- kill [options] <pid> [...]
-
-Options:
- <pid> [...]            send signal to every <pid> listed
- -<signal>, -s, --signal <signal>
-                        specify the <signal> to be sent
- -q, --queue <value>    integer value to be sent with the signal
- -l, --list=[<signal>]  list all signal names, or convert one to a name
- -L, --table            list all signal names in a nice table
-
- -h, --help     display this help and exit
- -V, --version  output version information and exit
-
-For more details see kill(1).
+INFO:     Will watch for changes in these directories: ['/home/kit/Documents/repos/sc2gameanalizer']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [1739395] using StatReload
+INFO:     Started server process [1739434]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:41306 - "GET /api/games HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51778 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51788 - "GET /api/games?is_pro=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51796 - "GET /api/payment/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51808 - "GET /api/payment/chains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59304 - "POST /api/payment/create HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57506 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49028 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59148 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33084 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56680 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47708 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38120 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46356 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46372 - "GET /api/games?is_pro=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46388 - "GET /api/payment/chains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46396 - "GET /api/payment/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46400 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52558 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33142 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39902 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53600 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53612 - "GET /api/games?is_pro=false HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53616 - "GET /api/payment/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53618 - "GET /api/payment/chains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43454 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60032 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39960 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39416 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44836 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49438 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39206 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45662 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53936 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39702 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37644 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54854 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54864 - "GET /api/payment/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54868 - "GET /api/payment/chains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34806 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49260 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48710 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42092 - "GET /api/payment/status/1 HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1739434]
+INFO:     Started server process [1806296]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1806296]
+INFO:     Started server process [1807017]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'backend/main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1807017]
+INFO:     Started server process [1808888]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'backend/main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1808888]
+INFO:     Started server process [1809444]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:52744 - "POST /api/payment/create HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1809444]
+Process SpawnProcess-6:
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 313, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 67, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/usr/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 71, in serve
+    await self._serve(sockets)
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 78, in _serve
+    config.load()
+    ~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/config.py", line 439, in load
+    self.loaded_app = import_from_string(self.app)
+                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.13/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/main.py", line 34, in <module>
+    from backend.crypto_payments import (
+    ...<13 lines>...
+    )
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/crypto_payments.py", line 118
+    price_str = os.environ"PRO_PRICE_USD", "19")
+                                               ^
+SyntaxError: unmatched ')'
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+Process SpawnProcess-7:
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 313, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 67, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/usr/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 71, in serve
+    await self._serve(sockets)
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 78, in _serve
+    config.load()
+    ~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/config.py", line 439, in load
+    self.loaded_app = import_from_string(self.app)
+                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.13/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/main.py", line 34, in <module>
+    from backend.crypto_payments import (
+    ...<13 lines>...
+    )
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/crypto_payments.py", line 118
+    price_str = os.environ[]"PRO_PRICE_USD", "19")
+                                                 ^
+SyntaxError: unmatched ')'
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+Process SpawnProcess-8:
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 313, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 67, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/usr/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 71, in serve
+    await self._serve(sockets)
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 78, in _serve
+    config.load()
+    ~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/config.py", line 439, in load
+    self.loaded_app = import_from_string(self.app)
+                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.13/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/main.py", line 34, in <module>
+    from backend.crypto_payments import (
+    ...<13 lines>...
+    )
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/crypto_payments.py", line 118
+    price_str = os.environ[]"PRO_PRICE_USD", "19"]
+                                                 ^
+SyntaxError: unmatched ']'
+WARNING:  StatReload detected changes in 'backend/crypto_payments.py'. Reloading...
+Process SpawnProcess-9:
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 313, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/lib/python3.13/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 67, in run
+    return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+  File "/usr/lib/python3.13/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.13/asyncio/base_events.py", line 719, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 71, in serve
+    await self._serve(sockets)
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/server.py", line 78, in _serve
+    config.load()
+    ~~~~~~~~~~~^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/config.py", line 439, in load
+    self.loaded_app = import_from_string(self.app)
+                      ~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/kit/Documents/repos/sc2gameanalizer/.venv/lib/python3.13/site-packages/uvicorn/importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "/usr/lib/python3.13/importlib/__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/main.py", line 34, in <module>
+    from backend.crypto_payments import (
+    ...<13 lines>...
+    )
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/crypto_payments.py", line 125, in <module>
+    PRO_PRICE = get_pro_price()
+  File "/home/kit/Documents/repos/sc2gameanalizer/backend/crypto_payments.py", line 118, in get_pro_price
+    price_str = os.environ["PRO_PRICE_USD", "19"]
+                ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen os>", line 713, in __getitem__
+  File "<frozen os>", line 795, in encode
+TypeError: str expected, not tuple

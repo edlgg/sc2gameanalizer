@@ -1,6 +1,7 @@
-import { useGames } from '../hooks/useGames';
-import { Loader2, Calendar, Map, Trophy } from 'lucide-react';
+import { useGames, useDeleteGame, useDeleteAllGames } from '../hooks/useGames';
+import { Loader2, Calendar, Map, Trophy, Trash2 } from 'lucide-react';
 import { formatTime, getRaceColor } from '../utils/formatters';
+import { useState } from 'react';
 
 interface GameLibraryProps {
   onGameSelect: (gameId: number) => void;
@@ -8,6 +9,9 @@ interface GameLibraryProps {
 
 export default function GameLibrary({ onGameSelect }: GameLibraryProps) {
   const { data: games, isLoading } = useGames({ is_pro: false });
+  const deleteGameMutation = useDeleteGame();
+  const deleteAllMutation = useDeleteAllGames();
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
 
   if (isLoading) {
     return (
@@ -16,6 +20,22 @@ export default function GameLibrary({ onGameSelect }: GameLibraryProps) {
       </div>
     );
   }
+
+  const handleDeleteGame = async (gameId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering game selection
+    if (window.confirm('Are you sure you want to delete this replay?')) {
+      await deleteGameMutation.mutateAsync(gameId);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (showDeleteAllConfirm) {
+      await deleteAllMutation.mutateAsync(true); // Keep pro replays
+      setShowDeleteAllConfirm(false);
+    } else {
+      setShowDeleteAllConfirm(true);
+    }
+  };
 
   if (!games || games.length === 0) {
     return (
@@ -29,63 +49,117 @@ export default function GameLibrary({ onGameSelect }: GameLibraryProps) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Your Replays</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">Your Replays</h2>
+
+        {games.length > 0 && (
+          <div className="flex gap-2">
+            {showDeleteAllConfirm ? (
+              <>
+                <button
+                  onClick={handleDeleteAll}
+                  disabled={deleteAllMutation.isPending}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {deleteAllMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Confirm Delete All
+                </button>
+                <button
+                  onClick={() => setShowDeleteAllConfirm(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleDeleteAll}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete All
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-4">
         {games.map((game) => (
-          <button
+          <div
             key={game.id}
-            onClick={() => onGameSelect(game.id)}
-            className="card hover:border-sc2-blue cursor-pointer text-left transition-all hover:scale-[1.01]"
+            className="card hover:border-sc2-blue transition-all hover:scale-[1.01] flex items-center justify-between"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: getRaceColor(game.player1_race) }}
-                    />
-                    <span className="font-semibold">{game.player1_name}</span>
-                    <span className="text-slate-400 text-sm">{game.player1_race}</span>
+            <button
+              onClick={() => onGameSelect(game.id)}
+              className="flex-1 text-left cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-4 mb-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: getRaceColor(game.player1_race) }}
+                      />
+                      <span className="font-semibold">{game.player1_name}</span>
+                      <span className="text-slate-400 text-sm">{game.player1_race}</span>
+                    </div>
+
+                    <span className="text-slate-500">vs</span>
+
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: getRaceColor(game.player2_race) }}
+                      />
+                      <span className="font-semibold">{game.player2_name}</span>
+                      <span className="text-slate-400 text-sm">{game.player2_race}</span>
+                    </div>
                   </div>
 
-                  <span className="text-slate-500">vs</span>
-
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: getRaceColor(game.player2_race) }}
-                    />
-                    <span className="font-semibold">{game.player2_name}</span>
-                    <span className="text-slate-400 text-sm">{game.player2_race}</span>
+                  <div className="flex items-center gap-4 text-sm text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <Map className="w-4 h-4" />
+                      <span>{game.map_name}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>{new Date(game.game_date).toLocaleDateString()}</span>
+                    </div>
+                    <span>{formatTime(game.game_length_seconds)}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-sm text-slate-400">
-                  <div className="flex items-center gap-1">
-                    <Map className="w-4 h-4" />
-                    <span>{game.map_name}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>{new Date(game.game_date).toLocaleDateString()}</span>
-                  </div>
-                  <span>{formatTime(game.game_length_seconds)}</span>
+                <div
+                  className={`px-4 py-2 rounded-lg font-semibold ${
+                    game.result === 1
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-red-500/20 text-red-400'
+                  }`}
+                >
+                  {game.result === 1 ? '1-0' : '0-1'}
                 </div>
               </div>
+            </button>
 
-              <div
-                className={`px-4 py-2 rounded-lg font-semibold ${
-                  game.result === 1
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-red-500/20 text-red-400'
-                }`}
-              >
-                {game.result === 1 ? 'WIN' : 'LOSS'}
-              </div>
-            </div>
-          </button>
+            <button
+              onClick={(e) => handleDeleteGame(game.id, e)}
+              disabled={deleteGameMutation.isPending}
+              className="ml-4 p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors disabled:opacity-50"
+              title="Delete replay"
+            >
+              {deleteGameMutation.isPending && deleteGameMutation.variables === game.id ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Trash2 className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         ))}
       </div>
     </div>

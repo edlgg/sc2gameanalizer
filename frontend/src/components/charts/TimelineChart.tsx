@@ -12,45 +12,94 @@ interface TimelineChartProps {
   color2?: string;
   type?: 'line' | 'area';
   showDifference?: boolean;
+  showProRange?: boolean;  // Show range band for multiple pro games
+  showIndividualGames?: boolean;  // Show individual pro game lines
+  proGameNames?: { [gameId: string]: string };  // Names for individual games
 }
 
 export default function TimelineChart({
   data,
   title,
   valueKey = 'value',
-  valueKey2 = 'value2',
   label1 = 'You',
-  label2 = 'Pro',
+  label2 = 'Pro Avg',
   color1 = '#00a8ff',
   color2 = '#ffd700',
   type = 'line',
   showDifference = false,
+  showProRange = false,
+  showIndividualGames = false,
+  proGameNames = {},
 }: TimelineChartProps) {
+  // Extract individual pro game keys from data
+  const proGameKeys = Array.from(
+    new Set(
+      data.flatMap(d => d.proGames ? Object.keys(d.proGames) : [])
+    )
+  );
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl">
-          <p className="text-sm text-slate-400 mb-2">{data.timeFormatted}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center justify-between gap-4">
-              <span style={{ color: entry.color }} className="font-semibold">
-                {entry.name}:
+        <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 shadow-xl max-w-xs">
+          <p className="text-sm text-slate-400 mb-2 font-semibold">{data.timeFormatted}</p>
+
+          {/* User value */}
+          <div className="flex items-center justify-between gap-4 mb-1">
+            <span style={{ color: color1 }} className="font-semibold text-sm">
+              {label1}:
+            </span>
+            <span className="text-white font-bold">
+              {Math.round(data.value).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Pro average */}
+          {data.proAvg !== undefined && (
+            <div className="flex items-center justify-between gap-4 mb-1">
+              <span style={{ color: color2 }} className="font-semibold text-sm">
+                {label2}:
               </span>
               <span className="text-white font-bold">
-                {typeof entry.value === 'number' ? Math.round(entry.value).toLocaleString() : entry.value}
+                {Math.round(data.proAvg).toLocaleString()}
               </span>
             </div>
-          ))}
-          {showDifference && payload.length === 2 && (
+          )}
+
+          {/* Pro range */}
+          {showProRange && data.proMin !== undefined && data.proMax !== undefined && (
+            <div className="text-xs text-slate-400 mb-1">
+              Range: {Math.round(data.proMin).toLocaleString()} - {Math.round(data.proMax).toLocaleString()}
+            </div>
+          )}
+
+          {/* Individual games (if shown) */}
+          {showIndividualGames && data.proGames && (
+            <div className="mt-2 pt-2 border-t border-slate-700">
+              <div className="text-xs text-slate-500 mb-1">Individual Games:</div>
+              {Object.entries(data.proGames).map(([gameKey, value]) => (
+                <div key={gameKey} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-400 truncate">
+                    {proGameNames[gameKey] || gameKey}:
+                  </span>
+                  <span className="text-slate-300">
+                    {Math.round(value as number).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Difference */}
+          {showDifference && data.proAvg !== undefined && (
             <div className="mt-2 pt-2 border-t border-slate-700">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-slate-400 text-sm">Difference:</span>
                 <span className={`font-bold text-sm ${
-                  payload[0].value > payload[1].value ? 'text-green-400' : 'text-red-400'
+                  data.value > data.proAvg ? 'text-green-400' : 'text-red-400'
                 }`}>
-                  {payload[0].value > payload[1].value ? '+' : ''}
-                  {Math.round(payload[0].value - payload[1].value).toLocaleString()}
+                  {data.value > data.proAvg ? '+' : ''}
+                  {Math.round(data.value - data.proAvg).toLocaleString()}
                 </span>
               </div>
             </div>
@@ -61,7 +110,8 @@ export default function TimelineChart({
     return null;
   };
 
-  const ChartComponent = type === 'area' ? AreaChart : LineChart;
+  // Use AreaChart when showing pro range (need Area component), otherwise use type-based component
+  const ChartComponent = showProRange || type === 'area' ? AreaChart : LineChart;
 
   return (
     <div className="chart-container">
@@ -88,6 +138,52 @@ export default function TimelineChart({
             wrapperStyle={{ paddingTop: '20px' }}
             iconType="line"
           />
+
+          {/* Pro range band (if multiple pro games selected) */}
+          {showProRange && (
+            <Area
+              type="monotone"
+              dataKey="proMax"
+              stroke="none"
+              fill={color2}
+              fillOpacity={0.15}
+              animationDuration={1500}
+              animationEasing="ease-in-out"
+              legendType="none"
+            />
+          )}
+          {showProRange && (
+            <Area
+              type="monotone"
+              dataKey="proMin"
+              stroke="none"
+              fill="#1e293b"
+              fillOpacity={1}
+              animationDuration={1500}
+              animationEasing="ease-in-out"
+              legendType="none"
+            />
+          )}
+
+          {/* Individual pro game lines (thin, dashed, semi-transparent) */}
+          {showIndividualGames && proGameKeys.map((gameKey) => (
+            <Line
+              key={gameKey}
+              type="monotone"
+              dataKey={`proGames.${gameKey}`}
+              name={proGameNames[gameKey] || gameKey}
+              stroke={color2}
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              strokeOpacity={0.4}
+              dot={false}
+              animationDuration={1500}
+              animationEasing="ease-in-out"
+              legendType="line"
+            />
+          ))}
+
+          {/* Main lines: User and Pro Average */}
           {type === 'area' ? (
             <>
               <Area
@@ -97,19 +193,18 @@ export default function TimelineChart({
                 stroke={color1}
                 fill={color1}
                 fillOpacity={0.3}
-                strokeWidth={2}
+                strokeWidth={3}
                 animationDuration={1500}
                 animationEasing="ease-in-out"
               />
               <Area
                 type="monotone"
-                dataKey={valueKey2}
+                dataKey="proAvg"
                 name={label2}
                 stroke={color2}
                 fill={color2}
                 fillOpacity={0.2}
-                strokeWidth={2}
-                strokeDasharray="5 5"
+                strokeWidth={3}
                 animationDuration={1500}
                 animationEasing="ease-in-out"
               />
@@ -128,11 +223,10 @@ export default function TimelineChart({
               />
               <Line
                 type="monotone"
-                dataKey={valueKey2}
+                dataKey="proAvg"
                 name={label2}
                 stroke={color2}
                 strokeWidth={3}
-                strokeDasharray="5 5"
                 dot={false}
                 animationDuration={1500}
                 animationEasing="ease-in-out"

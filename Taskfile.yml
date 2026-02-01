@@ -1,6 +1,14 @@
 version: '3'
 
+dotenv: [ '.env' ]
+
 tasks:
+  # Replay download
+  download:
+    desc: Download replays from spawningtool.com (default 5 pages)
+    cmds:
+      - uv run python scripts/download_replays.py --pages={{.PAGES | default "5"}} --delay={{.DELAY | default "0.5"}}
+
   # Database generation
   generate:
     desc: Generate snapshot database from all replays
@@ -25,7 +33,7 @@ tasks:
     desc: Run React frontend dev server
     dir: frontend
     cmds:
-      - npm run dev --host
+      - npm run dev -- --host
 
   # Testing
   test:

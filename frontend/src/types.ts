@@ -63,6 +63,9 @@ export interface SimilarGame extends Game {
   macro_score: number;
   map_match: boolean;
   matchup: string;
+  matched_player_number: number;
+  matched_player_name: string;
+  matched_player_race: string;
 }
 
 export interface ComparisonData {
@@ -77,8 +80,15 @@ export type Race = 'Terran' | 'Protoss' | 'Zerg';
 export interface ChartDataPoint {
   time: number;
   timeFormatted: string;
-  value: number;
-  value2?: number;
+  value: number;  // User value
+  value2?: number;  // Pro average value (for backward compatibility)
+  proAvg?: number;  // Pro average value (explicit)
+  proMin?: number;  // Minimum value across selected pro games
+  proMax?: number;  // Maximum value across selected pro games
+  // Individual pro game values (for low-level comparison)
+  proGames?: {
+    [gameId: string]: number;
+  };
 }
 
 export interface KeyMoment {
@@ -96,4 +106,64 @@ export interface DeltaPoint {
   difference: number;
   percentageDifference: number;
   isAhead: boolean;
+}
+
+export interface BuildOrderEvent {
+  event_type: 'building' | 'unit' | 'upgrade';
+  item_name: string;
+  game_time_seconds: number;
+  player_number: 1 | 2;
+  is_milestone: boolean;
+}
+
+export interface BuildOrderComparison {
+  event_type: 'building' | 'unit' | 'upgrade';
+  item_name: string;
+  user_time: number;
+  pro_avg_time: number;
+  difference: number;
+  status: 'early' | 'on-time' | 'late';
+}
+
+export interface BuildOrderAnalysis {
+  comparisons: BuildOrderComparison[];
+  user_missing: Array<{
+    event_type: string;
+    item_name: string;
+    pro_avg_time: number;
+  }>;
+  user_extra: Array<{
+    event_type: string;
+    item_name: string;
+    user_time: number;
+  }>;
+}
+
+// Auth types
+export interface User {
+  id: number;
+  email: string;
+  subscription_tier: 'free' | 'pro';
+  uploads_used: number;
+  uploads_limit: number; // -1 means unlimited
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: User;
+}
+
+export interface UploadLimitError {
+  error: 'upload_limit_reached';
+  message: string;
+  uploads_used: number;
+  uploads_limit: number;
+}
+
+export interface UploadResponse {
+  success: boolean;
+  game: Game;
+  uploads_used?: number;
+  uploads_limit?: number;
 }

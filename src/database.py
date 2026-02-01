@@ -9,7 +9,7 @@ from typing import Dict, List, Any
 def init_database(db_path: Path) -> None:
     """
     Initialize the database with games and snapshots tables.
-    Drops existing tables to ensure clean state.
+    Safe to call multiple times - uses CREATE IF NOT EXISTS.
 
     Args:
         db_path: Path to the SQLite database file
@@ -17,13 +17,9 @@ def init_database(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Drop existing tables to start fresh
-    cursor.execute("DROP TABLE IF EXISTS snapshots")
-    cursor.execute("DROP TABLE IF EXISTS games")
-
-    # Create games table
+    # Create games table (safe to call multiple times)
     cursor.execute("""
-        CREATE TABLE games (
+        CREATE TABLE IF NOT EXISTS games (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             replay_file TEXT NOT NULL UNIQUE,
 
@@ -52,7 +48,7 @@ def init_database(db_path: Path) -> None:
 
     # Create snapshots table
     cursor.execute("""
-        CREATE TABLE snapshots (
+        CREATE TABLE IF NOT EXISTS snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             game_id INTEGER REFERENCES games(id),
             game_time_seconds INTEGER,
@@ -97,19 +93,86 @@ def init_database(db_path: Path) -> None:
         )
     """)
 
-    # Create indexes
+    # Create build_order_events table
     cursor.execute("""
-        CREATE INDEX idx_game_time
+        CREATE TABLE IF NOT EXISTS build_order_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id INTEGER REFERENCES games(id),
+            player_number INTEGER CHECK (player_number IN (1, 2)),
+            event_type TEXT CHECK (event_type IN ('building', 'unit', 'upgrade')),
+            item_name TEXT NOT NULL,
+            game_time_seconds INTEGER NOT NULL,
+            is_milestone BOOLEAN DEFAULT 0,
+
+            UNIQUE(game_id, player_number, event_type, item_name)
+        )
+    """)
+
+    # Create indexes (IF NOT EXISTS for idempotency)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_game_time
         ON snapshots(game_id, game_time_seconds)
     """)
 
     cursor.execute("""
-        CREATE INDEX idx_player
+        CREATE INDEX IF NOT EXISTS idx_player
         ON snapshots(game_id, player_number)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_build_order_game
+        ON build_order_events(game_id, player_number)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_build_order_milestones
+        ON build_order_events(is_milestone)
+    """)
+
+    # Additional indexes for performance (from production audit)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_games_is_pro_replay
+        ON games(is_pro_replay)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_games_matchup
+        ON games(player1_race, player2_race)
     """)
 
     conn.commit()
     conn.close()
+
+
+def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str) -> bool:
+    """
+    Delete a game and all its related data (snapshots, build_order_events) by replay_file.
+
+    Args:
+        conn: Database connection
+        replay_file: Name of the replay file
+
+    Returns:
+        True if a game was deleted, False if not found
+    """
+    cursor = conn.cursor()
+
+    # Get the game_id first
+    cursor.execute("SELECT id FROM games WHERE replay_file = ?", (replay_file,))
+    result = cursor.fetchone()
+
+    if result is None:
+        return False
+
+    game_id = result[0]
+
+    # Delete in order: build_order_events, snapshots, then game
+    cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
+    cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+    cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+
+    conn.commit()
+    return True
 
 
 def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any]) -> int:
@@ -206,6 +269,35 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
             snapshot['resources_spent_gas'],
             snapshot['collection_efficiency'],
             snapshot['spending_efficiency']
+        ))
+
+    conn.commit()
+
+
+def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_number: int, events: List[Dict[str, Any]]) -> None:
+    """
+    Insert build order events into the database.
+
+    Args:
+        conn: Database connection
+        game_id: The game_id to associate events with
+        player_number: Player number (1 or 2)
+        events: List of event dictionaries with keys: event_type, item_name, game_time_seconds, is_milestone
+    """
+    cursor = conn.cursor()
+
+    for event in events:
+        cursor.execute("""
+            INSERT OR IGNORE INTO build_order_events (
+                game_id, player_number, event_type, item_name, game_time_seconds, is_milestone
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            game_id,
+            player_number,
+            event['event_type'],
+            event['item_name'],
+            event['game_time_seconds'],
+            event.get('is_milestone', False)
         ))
 
     conn.commit()
