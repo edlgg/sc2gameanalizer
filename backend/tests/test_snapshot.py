@@ -3,8 +3,8 @@ Tests for snapshot generation and GameState.
 """
 import json
 from unittest.mock import Mock
-from src.snapshot import GameState
-from src.constants import WORKER_UNITS, BASE_BUILDINGS, UNIT_COSTS
+from backend.src.snapshot import GameState
+from backend.src.constants import WORKER_UNITS, BASE_BUILDINGS, UNIT_COSTS
 
 
 def create_mock_player(name="TestPlayer", race="Terran"):

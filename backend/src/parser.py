@@ -6,14 +6,14 @@ from pathlib import Path
 from typing import Dict, Any, List
 import sc2reader
 
-from src.database import (
+from backend.src.database import (
     insert_game,
     insert_snapshots,
     insert_build_order_events,
     delete_game_by_replay_file,
 )
-from src.snapshot import GameState
-from src.build_order import extract_build_order_events
+from backend.src.snapshot import GameState
+from backend.src.build_order import extract_build_order_events
 
 
 def reparse_replay_file(replay_path: Path, db_path: Path) -> None:

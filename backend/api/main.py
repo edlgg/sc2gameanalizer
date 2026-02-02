@@ -25,11 +25,11 @@ import json
 import os
 from pydantic import BaseModel, EmailStr
 
-from src.parser import parse_replay_file
-from src.database import init_database
-from backend.similarity import find_similar_games
-from backend.ml_similarity import find_similar_games_ml, GameEmbedder
-from backend.auth import (
+from backend.src.parser import parse_replay_file
+from backend.src.database import init_database
+from backend.api.similarity import find_similar_games
+from backend.api.ml_similarity import find_similar_games_ml, GameEmbedder
+from backend.api.auth import (
     init_user_tables,
     create_user,
     authenticate_user,
@@ -43,7 +43,7 @@ from backend.auth import (
     User,
     ACCESS_TOKEN_EXPIRE_MINUTES,
 )
-from backend.crypto_payments import (
+from backend.api.crypto_payments import (
     init_payment_tables,
     create_payment,
     verify_payment,

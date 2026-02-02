@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import sc2reader
 
-from src.parser import extract_game_metadata, generate_snapshots, parse_replay_file
-from src.database import init_database
+from backend.src.parser import extract_game_metadata, generate_snapshots, parse_replay_file
+from backend.src.database import init_database
 
 
 def get_test_replay():

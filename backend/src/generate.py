@@ -3,8 +3,8 @@ Main entry point for generating snapshot database from replay files.
 """
 from pathlib import Path
 
-from src.database import init_database
-from src.parser import parse_replay_file
+from backend.src.database import init_database
+from backend.src.parser import parse_replay_file
 
 
 def main():

@@ -5,7 +5,7 @@ import json
 from typing import Dict, Any, Set, Optional
 from collections import defaultdict
 
-from src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS
+from backend.src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS
 
 
 # Units to ignore (not real combat units)

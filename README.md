@@ -44,10 +44,10 @@ task install
 
 ```bash
 # Terminal 1: Start backend
-./run-backend.sh
+./backend/run-backend.sh
 
 # Terminal 2: Start frontend
-./run-frontend.sh
+./frontend/run-frontend.sh
 ```
 
 **Option 2: Using task commands**
@@ -64,7 +64,7 @@ task frontend
 
 ```bash
 # Terminal 1: Backend
-uv run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 2: Frontend
 cd frontend && npm run dev
@@ -90,10 +90,10 @@ curl -F "file=@path/to/pro_replay.SC2Replay" http://localhost:8000/api/upload
 # (Feature to mark as pro in UI coming soon)
 ```
 
-**For testing**, you can use the existing `src/generate.py` script to process replays from a directory:
+**For testing**, you can use the existing `backend/src/generate.py` script to process replays from a directory:
 
 ```bash
-# Place pro replays in a directory, then modify src/generate.py to mark them as pro
+# Place pro replays in a directory, then modify backend/src/generate.py to mark them as pro
 task generate
 ```
 
