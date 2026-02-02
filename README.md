@@ -29,13 +29,16 @@ A premium SC2 replay analysis tool that compares your gameplay to professional p
 
 ```bash
 # 1. Install Python dependencies
-uv pip install -r requirements.txt
+uv sync
 
 # 2. Install frontend dependencies
 cd frontend && npm install && cd ..
 
 # Or use task to install everything:
 task install
+
+# To install dev dependencies (pytest, etc.):
+task install-dev
 ```
 
 ### Running the App
@@ -179,9 +182,8 @@ sc2gameanalizer/
 │   ├── replays.db        # Main database
 │   └── replays/          # Uploaded replay files
 ├── Taskfile.yml          # Task runner commands
-├── run-backend.sh        # Backend startup script
-├── run-frontend.sh       # Frontend startup script
-├── requirements.txt      # Python dependencies
+├── pyproject.toml        # Python dependencies
+├── uv.lock               # Locked dependency versions
 └── README.md
 ```
 

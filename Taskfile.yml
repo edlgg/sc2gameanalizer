@@ -57,7 +57,13 @@ tasks:
   install:
     desc: Install all dependencies (Python + Node)
     cmds:
-      - uv pip install -r requirements.txt
+      - uv sync
+      - cd frontend && npm install
+
+  install-dev:
+    desc: Install all dependencies including dev tools
+    cmds:
+      - uv sync --extra dev
       - cd frontend && npm install
 
   # Build for production
