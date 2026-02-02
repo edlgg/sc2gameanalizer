@@ -7,18 +7,18 @@ tasks:
   download:
     desc: Download replays from spawningtool.com (default 5 pages)
     cmds:
-      - uv run python backend/scripts/download_replays.py --pages={{.PAGES | default "5"}} --delay={{.DELAY | default "0.5"}}
+      - uv run --project backend python backend/scripts/download_replays.py --pages={{.PAGES | default "5"}} --delay={{.DELAY | default "0.5"}}
 
   # Database generation
   generate:
     desc: Generate snapshot database from all replays
     cmds:
-      - uv run python -m backend.src.generate
+      - uv run --project backend python -m backend.src.generate
 
   validate:
     desc: Validate generated snapshot database
     cmds:
-      - uv run python -m backend.src.validate
+      - uv run --project backend python -m backend.src.validate
     deps:
       - generate
 
@@ -27,7 +27,7 @@ tasks:
     desc: Run FastAPI backend server
     dir: .
     cmds:
-      - uv run uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8003
+      - uv run --project backend uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8003
 
   frontend:
     desc: Run React frontend dev server
@@ -39,13 +39,13 @@ tasks:
   test:
     desc: Run tests with pytest
     cmds:
-      - uv run pytest backend/tests/ -v
+      - uv run --project backend pytest backend/tests/ -v
 
   # Database management
   init-db:
     desc: Initialize database (creates tables)
     cmds:
-      - uv run python -c "from backend.src.database import init_database; from pathlib import Path; init_database(Path('data/replays.db'))"
+      - uv run --project backend python -c "from backend.src.database import init_database; from pathlib import Path; init_database(Path('data/replays.db'))"
 
   clean:
     desc: Remove generated databases
@@ -57,13 +57,13 @@ tasks:
   install:
     desc: Install all dependencies (Python + Node)
     cmds:
-      - uv sync
+      - uv sync --project backend
       - cd frontend && npm install
 
   install-dev:
     desc: Install all dependencies including dev tools
     cmds:
-      - uv sync --extra dev
+      - uv sync --project backend --extra dev
       - cd frontend && npm install
 
   # Build for production

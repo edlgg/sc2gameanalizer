@@ -43,17 +43,7 @@ task install-dev
 
 ### Running the App
 
-**Option 1: Using shell scripts (easiest)**
-
-```bash
-# Terminal 1: Start backend
-./backend/run-backend.sh
-
-# Terminal 2: Start frontend
-./frontend/run-frontend.sh
-```
-
-**Option 2: Using task commands**
+**Option 1: Using task commands (recommended)**
 
 ```bash
 # Terminal 1: Start backend
@@ -63,11 +53,11 @@ task backend
 task frontend
 ```
 
-**Option 3: Manual commands**
+**Option 2: Manual commands**
 
 ```bash
 # Terminal 1: Backend
-uv run uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
+uv run --project backend uvicorn backend.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Terminal 2: Frontend
 cd frontend && npm run dev
@@ -151,39 +141,41 @@ The comparison dashboard shows:
 
 ```
 sc2gameanalizer/
-├── backend/
-│   ├── main.py           # FastAPI app
-│   ├── similarity.py     # Similarity matching algorithm
-│   └── __init__.py
-├── frontend/
+├── backend/              # All Python code
+│   ├── api/             # FastAPI endpoints
+│   │   ├── main.py      # FastAPI app
+│   │   ├── auth.py      # Authentication
+│   │   ├── similarity.py # Similarity matching
+│   │   └── ...
+│   ├── src/             # Core business logic
+│   │   ├── parser.py    # Replay parser
+│   │   ├── database.py  # Database operations
+│   │   ├── snapshot.py  # Game state tracking
+│   │   ├── constants.py # Unit costs, races
+│   │   ├── generate.py  # Batch processing
+│   │   └── validate.py  # Data validation
+│   ├── tests/           # Python tests
+│   ├── scripts/         # Utility scripts
+│   ├── pyproject.toml   # Python dependencies
+│   └── uv.lock          # Locked versions
+├── frontend/            # React application
 │   ├── src/
-│   │   ├── components/   # React components
-│   │   │   ├── charts/   # Chart components
+│   │   ├── components/  # React components
+│   │   │   ├── charts/  # Chart components
 │   │   │   ├── ComparisonDashboard.tsx
 │   │   │   ├── GameLibrary.tsx
-│   │   │   ├── UploadZone.tsx
-│   │   │   └── KeyMomentsPanel.tsx
-│   │   ├── hooks/        # React Query hooks
-│   │   ├── api/          # API client
-│   │   ├── utils/        # Helper functions
-│   │   ├── types.ts      # TypeScript types
-│   │   ├── App.tsx       # Main app
-│   │   └── index.css     # Global styles
+│   │   │   └── ...
+│   │   ├── hooks/       # React Query hooks
+│   │   ├── api/         # API client
+│   │   ├── utils/       # Helper functions
+│   │   ├── types.ts     # TypeScript types
+│   │   └── App.tsx      # Main app
 │   ├── package.json
 │   └── vite.config.ts
-├── src/
-│   ├── parser.py         # Replay parser
-│   ├── database.py       # Database operations
-│   ├── snapshot.py       # Game state tracking
-│   ├── constants.py      # Unit costs, races
-│   ├── generate.py       # Batch processing
-│   └── validate.py       # Data validation
-├── data/
-│   ├── replays.db        # Main database
-│   └── replays/          # Uploaded replay files
-├── Taskfile.yml          # Task runner commands
-├── pyproject.toml        # Python dependencies
-├── uv.lock               # Locked dependency versions
+├── data/                # Databases and replays
+│   ├── replays.db       # Main database
+│   └── replays/         # Uploaded replay files
+├── Taskfile.yml         # Task runner commands
 └── README.md
 ```
 
