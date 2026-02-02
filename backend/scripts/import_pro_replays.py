@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 def main():
-    replays_db = Path("data/replays.db")
-    snapshots_db = Path("data/snapshots.db")
+    replays_db = Path("backend/data/replays.db")
+    snapshots_db = Path("backend/data/snapshots.db")
 
     if not snapshots_db.exists():
         print(f"❌ Error: {snapshots_db} not found")

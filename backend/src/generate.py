@@ -9,8 +9,8 @@ from backend.src.parser import parse_replay_file
 
 def main():
     """Process all replay files and generate snapshot database."""
-    replay_dir = Path("data/replays")
-    db_path = Path("data/replays.db")  # Changed from snapshots.db to match backend
+    replay_dir = Path("backend/data/replays")
+    db_path = Path("backend/data/replays.db")  # Changed from snapshots.db to match backend
 
     print(f"Initializing database at {db_path}...")
     init_database(db_path)

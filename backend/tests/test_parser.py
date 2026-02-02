@@ -13,10 +13,10 @@ from backend.src.database import init_database
 
 def get_test_replay():
     """Get the first available test replay."""
-    replay_dir = Path("data/replays")
+    replay_dir = Path("backend/data/replays")
     replays = list(replay_dir.glob("*.SC2Replay"))
     if not replays:
-        pytest.skip("No replay files found in data/replays")
+        pytest.skip("No replay files found in backend/data/replays")
     return replays[0]
 
 

@@ -45,13 +45,13 @@ tasks:
   init-db:
     desc: Initialize database (creates tables)
     cmds:
-      - uv run --project backend python -c "from backend.src.database import init_database; from pathlib import Path; init_database(Path('data/replays.db'))"
+      - uv run --project backend python -c "from backend.src.database import init_database; from pathlib import Path; init_database(Path('backend/data/replays.db'))"
 
   clean:
     desc: Remove generated databases
     cmds:
-      - rm -f data/snapshots.db
-      - rm -f data/replays.db
+      - rm -f backend/data/snapshots.db
+      - rm -f backend/data/replays.db
 
   # Setup
   install:

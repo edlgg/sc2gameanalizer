@@ -156,6 +156,9 @@ sc2gameanalizer/
 │   │   └── validate.py  # Data validation
 │   ├── tests/           # Python tests
 │   ├── scripts/         # Utility scripts
+│   ├── data/            # Databases and replays
+│   │   ├── replays.db   # Main database
+│   │   └── replays/     # Uploaded replay files
 │   ├── pyproject.toml   # Python dependencies
 │   └── uv.lock          # Locked versions
 ├── frontend/            # React application
@@ -172,9 +175,6 @@ sc2gameanalizer/
 │   │   └── App.tsx      # Main app
 │   ├── package.json
 │   └── vite.config.ts
-├── data/                # Databases and replays
-│   ├── replays.db       # Main database
-│   └── replays/         # Uploaded replay files
 ├── Taskfile.yml         # Task runner commands
 └── README.md
 ```

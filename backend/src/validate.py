@@ -7,7 +7,7 @@ from pathlib import Path
 
 def main():
     """Run validation checks on the snapshot database."""
-    db_path = Path("data/snapshots.db")
+    db_path = Path("backend/data/replays.db")
 
     if not db_path.exists():
         print(f"ERROR: Database not found at {db_path}")

@@ -131,8 +131,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="data/replays",
-        help="Output directory (default: data/replays)"
+        default="backend/data/replays",
+        help="Output directory (default: backend/data/replays)"
     )
     parser.add_argument(
         "--delay",
