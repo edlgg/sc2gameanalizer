@@ -564,7 +564,10 @@ async def create_crypto_payment(
             "support_email": SUPPORT_EMAIL,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        detail = str(e)
+        if "concurrent payments" in detail.lower():
+            raise HTTPException(status_code=503, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @app.get("/api/payment/status/{payment_id}")
@@ -576,6 +579,14 @@ async def check_payment_status(
     Check if a payment has been received at the treasury and upgrade user if confirmed.
     No sweeping needed - funds go directly to treasury with unique amounts.
     """
+    # Verify the requesting user owns this payment (return 404 to avoid leaking existence)
+    with get_connection(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM pending_payments WHERE id = ?", (payment_id,))
+        row = cursor.fetchone()
+        if not row or row[0] != user.id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
     is_paid, message = verify_payment(DB_PATH, payment_id)
 
     if is_paid:

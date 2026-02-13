@@ -179,10 +179,8 @@ def find_available_suffix(cursor, base_price: int) -> int:
         if slot not in used_suffixes:
             return slot
 
-    # Fallback: all 999 slots are in use (extremely unlikely)
-    # Use a random slot - collision will require manual resolution
-    import random
-    return random.randint(1, MAX_SUFFIX_SLOTS)
+    # All 999 slots are in use — refuse to create a duplicate amount
+    raise ValueError("Maximum concurrent payments reached. Please try again later.")
 
 
 def calculate_unique_amount(suffix: int, base_price: int) -> int:
@@ -511,7 +509,11 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
         treasury_address = get_treasury_address()
         current_balance = check_token_balance(treasury_address, chain, token)
 
-        # Check if payment received (balance increased by at least the expected amount)
+        # KNOWN LIMITATION: Balance-based verification can produce false positives when
+        # multiple payments are pending simultaneously. If User A and User B both have pending
+        # payments, and only User B pays, the treasury balance increase could falsely confirm
+        # User A's payment. For production use, migrate to event-based tracking (subscribe to
+        # ERC20 Transfer events filtered by exact amount + sender).
         balance_before = balance_before or 0
         if current_balance >= balance_before + expected_amount:
             # Payment received! Update status
