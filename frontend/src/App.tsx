@@ -1,14 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { Upload, TrendingUp, Loader2, LogIn } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import GameLibrary from './components/GameLibrary';
 import ComparisonDashboard from './components/ComparisonDashboard';
 import UploadZone from './components/UploadZone';
 import AuthModal from './components/AuthModal';
-import UserMenu from './components/UserMenu';
 import UpgradePrompt from './components/UpgradePrompt';
 import CryptoPaymentModal from './components/CryptoPaymentModal';
 import LandingPage from './components/LandingPage';
+import EditorialHeader from './components/EditorialHeader';
+import EditorialLayout from './components/EditorialLayout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { apiClient } from './api/client';
 
@@ -102,7 +103,7 @@ function AppContent() {
 
   // Authenticated users see the full app
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen" style={{ background: '#0a0a0a' }}>
       {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
@@ -127,76 +128,18 @@ function AppContent() {
         onPaymentConfirmed={handlePaymentConfirmed}
       />
 
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-sc2-blue to-sc2-purple rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">SC2 Replay Analyzer</h1>
-                <p className="text-sm text-slate-400">Compare your play to the pros</p>
-              </div>
-            </div>
+      {/* Editorial Header */}
+      <EditorialHeader
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        onUpgradeClick={() => setShowPaymentModal(true)}
+      />
 
-            <div className="flex items-center gap-4">
-              <nav className="flex gap-2">
-                <button
-                  onClick={() => setCurrentView('upload')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                    currentView === 'upload'
-                      ? 'bg-sc2-blue text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  <Upload className="w-4 h-4" />
-                  Upload
-                </button>
-                <button
-                  onClick={() => setCurrentView('library')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    currentView === 'library'
-                      ? 'bg-sc2-blue text-white'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  Library
-                </button>
-              </nav>
-
-              {/* Auth section */}
-              {isLoading ? (
-                <div className="w-8 h-8 rounded-full bg-slate-800 animate-pulse" />
-              ) : isAuthenticated ? (
-                <UserMenu onUpgradeClick={() => setShowPaymentModal(true)} />
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={openLogin}
-                    className="px-4 py-2 rounded-lg font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors flex items-center gap-2"
-                  >
-                    <LogIn className="w-4 h-4" />
-                    Sign In
-                  </button>
-                  <button
-                    onClick={openRegister}
-                    className="px-4 py-2 rounded-lg font-medium bg-gradient-to-r from-sc2-blue to-sc2-purple text-white hover:opacity-90 transition-opacity"
-                  >
-                    Sign Up
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-        {/* Main Content */}
-        <main className="container mx-auto px-4 py-8">
+      {/* Main Content */}
+      <EditorialLayout>
+        <main style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
           {currentView === 'upload' && (
-            <div className="animate-fade-in">
+            <div className="ed-animate-in">
               <UploadZone
                 onUploadSuccess={(gameId) => handleGameSelect(gameId)}
                 onUploadLimitReached={handleUploadLimitReached}
@@ -206,13 +149,13 @@ function AppContent() {
           )}
 
           {currentView === 'library' && (
-            <div className="animate-fade-in">
+            <div className="ed-animate-in">
               <GameLibrary onGameSelect={handleGameSelect} />
             </div>
           )}
 
           {currentView === 'comparison' && selectedGameId && (
-            <div className="animate-fade-in">
+            <div className="ed-animate-in">
               <ComparisonDashboard
                 gameId={selectedGameId}
                 onBack={() => setCurrentView('library')}
@@ -220,7 +163,8 @@ function AppContent() {
             </div>
           )}
         </main>
-      </div>
+      </EditorialLayout>
+    </div>
   );
 }
 

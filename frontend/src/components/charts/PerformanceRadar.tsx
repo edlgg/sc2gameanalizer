@@ -43,35 +43,36 @@ export default function PerformanceRadar({ userSnapshots, proSnapshots }: Perfor
     );
   }
 
-  // Normalize values (pro = 100%)
+  // Normalize values (pro = 100%, guard against division by zero)
+  const safeDivide = (a: number, b: number) => b > 0 ? Math.round((a / b) * 100) : 0;
   const data = [
     {
       metric: 'Workers',
-      You: Math.round((userAvg.workers / proAvg.workers) * 100),
+      You: safeDivide(userAvg.workers, proAvg.workers),
       Pro: 100,
       fullMark: 150,
     },
     {
       metric: 'Army Value',
-      You: Math.round((userAvg.army / proAvg.army) * 100),
+      You: safeDivide(userAvg.army, proAvg.army),
       Pro: 100,
       fullMark: 150,
     },
     {
       metric: 'Bases',
-      You: Math.round((userAvg.bases / proAvg.bases) * 100),
+      You: safeDivide(userAvg.bases, proAvg.bases),
       Pro: 100,
       fullMark: 150,
     },
     {
-      metric: 'Spending',
-      You: Math.round((userAvg.spending / proAvg.spending) * 100),
+      metric: 'Spending Eff.',
+      You: safeDivide(userAvg.spending, proAvg.spending),
       Pro: 100,
       fullMark: 150,
     },
     {
-      metric: 'Collection',
-      You: Math.round((userAvg.collection / proAvg.collection) * 100),
+      metric: 'Collection Rate',
+      You: safeDivide(userAvg.collection, proAvg.collection),
       Pro: 100,
       fullMark: 150,
     },
@@ -160,7 +161,7 @@ export default function PerformanceRadar({ userSnapshots, proSnapshots }: Perfor
             fill="#00a8ff"
             fillOpacity={0.5}
             strokeWidth={2}
-            animationDuration={1500}
+            animationDuration={500}
             animationEasing="ease-in-out"
           />
           <Radar
@@ -171,7 +172,7 @@ export default function PerformanceRadar({ userSnapshots, proSnapshots }: Perfor
             fillOpacity={0.3}
             strokeWidth={2}
             strokeDasharray="5 5"
-            animationDuration={1500}
+            animationDuration={500}
             animationEasing="ease-in-out"
           />
         </RadarChart>

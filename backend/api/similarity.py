@@ -7,10 +7,11 @@ Algorithm considers:
 3. Map similarity (optional)
 4. Macro pattern similarity at key timestamps (3min, 6min, 9min)
 """
-import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import math
+
+from backend.src.database import get_connection
 
 
 def get_matchup(player1_race: str, player2_race: str, player_perspective: int = 1) -> str:
@@ -152,7 +153,7 @@ def find_similar_games(
     Returns:
         List of similar games with similarity scores
     """
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         # Get user's game metadata
@@ -198,32 +199,48 @@ def find_similar_games(
 
         pro_games = cursor.fetchall()
 
+        if not pro_games:
+            return []
+
+        # Determine player perspective for each pro game
+        pro_game_perspectives = {}
+        for pro_game in pro_games:
+            pro_id, pro_length, pro_map, pro_p1_race, pro_p2_race, pro_p1_name, pro_p2_name, pro_date = pro_game
+            if pro_p1_race == user_p1_race and pro_p2_race == user_p2_race:
+                pro_game_perspectives[pro_id] = player_perspective
+            elif pro_p1_race == user_p2_race and pro_p2_race == user_p1_race:
+                pro_game_perspectives[pro_id] = 2 if player_perspective == 1 else 1
+
+        # Batch-load ALL pro game snapshots in a single query (fixes N+1)
+        pro_ids = list(pro_game_perspectives.keys())
+        placeholders = ','.join('?' * len(pro_ids))
+        cursor.execute(f"""
+            SELECT game_id, player_number, game_time_seconds, worker_count,
+                   army_value_minerals, army_value_gas, base_count
+            FROM snapshots
+            WHERE game_id IN ({placeholders})
+            ORDER BY game_id, game_time_seconds
+        """, pro_ids)
+
+        # Group snapshots by (game_id, player_number)
+        from collections import defaultdict
+        all_pro_snapshots: dict = defaultdict(list)
+        for row in cursor.fetchall():
+            gid, pnum, time_s, workers, army_min, army_gas, bases = row
+            all_pro_snapshots[(gid, pnum)].append((time_s, workers, army_min, army_gas, bases))
+
         # Calculate similarity scores for each pro game
         similarities = []
 
         for pro_game in pro_games:
             pro_id, pro_length, pro_map, pro_p1_race, pro_p2_race, pro_p1_name, pro_p2_name, pro_date = pro_game
 
-            # Determine which player perspective to use based on matchup
-            # If user is P1 in PvZ, compare to pro player 1 in PvZ (or pro player 2 in ZvP)
-            if pro_p1_race == user_p1_race and pro_p2_race == user_p2_race:
-                pro_player_num = player_perspective
-            elif pro_p1_race == user_p2_race and pro_p2_race == user_p1_race:
-                # Reversed matchup: user plays PvZ from P1, pro game is ZvP
-                pro_player_num = 2 if player_perspective == 1 else 1
-            else:
-                # This shouldn't happen with the new query, but skip just in case
+            if pro_id not in pro_game_perspectives:
                 continue
+            pro_player_num = pro_game_perspectives[pro_id]
 
-            # Get pro game snapshots
-            cursor.execute("""
-                SELECT game_time_seconds, worker_count, army_value_minerals, army_value_gas, base_count
-                FROM snapshots
-                WHERE game_id = ? AND player_number = ?
-                ORDER BY game_time_seconds
-            """, (pro_id, pro_player_num))
-
-            pro_snapshots = cursor.fetchall()
+            # Get pre-loaded snapshots for this pro game + player
+            pro_snapshots = all_pro_snapshots.get((pro_id, pro_player_num), [])
 
             # Calculate component scores
             length_score = calculate_game_length_similarity(user_length, pro_length)
@@ -232,12 +249,12 @@ def find_similar_games(
             # Map bonus (10% boost if same map)
             map_bonus = 0.1 if user_map and pro_map and user_map == pro_map else 0.0
 
-            # Overall similarity (weighted average)
-            overall_score = (
+            # Overall similarity (weighted average, clamped to [0, 1])
+            overall_score = min(1.0, max(0.0,
                 length_score * 0.3 +
                 macro_score * 0.7 +
                 map_bonus
-            )
+            ))
 
             # Determine which player's name and race we're comparing against
             matched_player_name = pro_p1_name if pro_player_num == 1 else pro_p2_name

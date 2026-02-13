@@ -10,6 +10,8 @@ from typing import Optional
 from dataclasses import dataclass
 from enum import Enum
 
+from backend.src.database import get_connection
+
 # Load .env file if it exists
 from dotenv import load_dotenv
 load_dotenv()
@@ -75,8 +77,9 @@ class UserUpload:
     uploaded_at: datetime
 
 
-# Free tier limits
+# Upload limits
 FREE_TIER_UPLOADS_PER_MONTH = 3
+MAX_UPLOADS_TOTAL = 200
 
 
 def init_user_tables(db_path: Path) -> None:
@@ -84,7 +87,7 @@ def init_user_tables(db_path: Path) -> None:
     Initialize user-related tables. Does NOT drop existing tables.
     Safe to call multiple times - uses IF NOT EXISTS.
     """
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         # Create users table
@@ -105,7 +108,7 @@ def init_user_tables(db_path: Path) -> None:
             CREATE TABLE IF NOT EXISTS user_uploads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id),
-                game_id INTEGER NOT NULL REFERENCES games(id),
+                game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
                 uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, game_id)
             )
@@ -172,7 +175,7 @@ def create_user(db_path: Path, email: str, password: str) -> Optional[User]:
     hashed_password = hash_password(password)
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with get_connection(db_path) as conn:
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -217,7 +220,7 @@ def _row_to_user(row: tuple) -> User:
 
 def get_user_by_email(db_path: Path, email: str) -> Optional[User]:
     """Get a user by email address."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         row = cursor.fetchone()
@@ -229,7 +232,7 @@ def get_user_by_email(db_path: Path, email: str) -> Optional[User]:
 
 def get_user_by_id(db_path: Path, user_id: int) -> Optional[User]:
     """Get a user by ID."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
@@ -251,7 +254,7 @@ def authenticate_user(db_path: Path, email: str, password: str) -> Optional[User
 
 def track_upload(db_path: Path, user_id: int, game_id: int) -> None:
     """Track a replay upload for a user."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR IGNORE INTO user_uploads (user_id, game_id)
@@ -266,7 +269,7 @@ def get_uploads_this_month(db_path: Path, user_id: int) -> int:
     now = _utc_now()
     first_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT COUNT(*) FROM user_uploads
@@ -275,6 +278,16 @@ def get_uploads_this_month(db_path: Path, user_id: int) -> int:
         count = cursor.fetchone()[0]
 
     return count
+
+
+def get_uploads_total(db_path: Path, user_id: int) -> int:
+    """Get the total number of uploads a user has ever made."""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM user_uploads WHERE user_id = ?", (user_id,)
+        )
+        return cursor.fetchone()[0]
 
 
 def can_upload(db_path: Path, user_id: int) -> tuple[bool, int, int]:
@@ -288,8 +301,13 @@ def can_upload(db_path: Path, user_id: int) -> tuple[bool, int, int]:
     if not user:
         return False, 0, 0
 
+    # Hard cap for all users
+    total = get_uploads_total(db_path, user_id)
+    if total >= MAX_UPLOADS_TOTAL:
+        return False, total, MAX_UPLOADS_TOTAL
+
     if user.subscription_tier == SubscriptionTier.PRO:
-        return True, 0, -1  # -1 means unlimited
+        return True, total, -1  # -1 means unlimited monthly
 
     uploads_used = get_uploads_this_month(db_path, user_id)
     can_do = uploads_used < FREE_TIER_UPLOADS_PER_MONTH
@@ -299,7 +317,7 @@ def can_upload(db_path: Path, user_id: int) -> tuple[bool, int, int]:
 
 def update_subscription(db_path: Path, user_id: int, tier: SubscriptionTier, stripe_customer_id: Optional[str] = None) -> bool:
     """Update a user's subscription tier."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         if stripe_customer_id:

@@ -8,11 +8,13 @@ interface DeltaChartProps {
 }
 
 export default function DeltaChart({ data, title, description }: DeltaChartProps) {
-  // Transform data for chart
+  // Transform data: split difference into above-zero and below-zero for correct gradient coloring
   const chartData = data.map(point => ({
     time: point.time,
     timeFormatted: `${Math.floor(point.time / 60)}:${(point.time % 60).toString().padStart(2, '0')}`,
     difference: point.difference,
+    ahead: Math.max(0, point.difference),
+    behind: Math.min(0, point.difference),
     percentage: point.percentageDifference,
     isAhead: point.isAhead,
   }));
@@ -68,9 +70,9 @@ export default function DeltaChart({ data, title, description }: DeltaChartProps
               <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
               <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
             </linearGradient>
-            <linearGradient id="behindGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.4}/>
+            <linearGradient id="behindGradient" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
+              <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -86,14 +88,27 @@ export default function DeltaChart({ data, title, description }: DeltaChartProps
           />
           <Tooltip content={<CustomTooltip />} />
           <ReferenceLine y={0} stroke="#64748b" strokeWidth={2} />
+          {/* Green area above zero line (ahead of pro) */}
           <Area
             type="monotone"
-            dataKey="difference"
-            stroke="#00a8ff"
+            dataKey="ahead"
+            stroke="#10b981"
             strokeWidth={2}
             fill="url(#aheadGradient)"
-            animationDuration={1500}
+            animationDuration={500}
             animationEasing="ease-in-out"
+            legendType="none"
+          />
+          {/* Red area below zero line (behind pro) */}
+          <Area
+            type="monotone"
+            dataKey="behind"
+            stroke="#ef4444"
+            strokeWidth={2}
+            fill="url(#behindGradient)"
+            animationDuration={500}
+            animationEasing="ease-in-out"
+            legendType="none"
           />
         </AreaChart>
       </ResponsiveContainer>

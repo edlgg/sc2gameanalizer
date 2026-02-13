@@ -16,4 +16,16 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split heavy chart library into its own chunk
+          recharts: ['recharts'],
+          // GSAP only used on landing page — keep out of dashboard chunk
+          gsap: ['gsap', 'gsap/ScrollTrigger', '@gsap/react'],
+        },
+      },
+    },
+  },
 })

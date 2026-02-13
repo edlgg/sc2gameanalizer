@@ -6,7 +6,6 @@ This module provides advanced game similarity matching by:
 2. Using embeddings and clustering for similarity
 3. Caching embeddings for performance
 """
-import sqlite3
 import json
 import logging
 import numpy as np
@@ -15,6 +14,8 @@ from typing import List, Dict, Any, Tuple, Optional
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle
+
+from backend.src.database import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -382,7 +383,7 @@ class GameEmbedder:
             return self.embeddings_cache[cache_key]
 
         # Extract features from database
-        with sqlite3.connect(db_path) as conn:
+        with get_connection(db_path) as conn:
             cursor = conn.cursor()
 
             # Get game length
@@ -450,7 +451,7 @@ def find_similar_games_ml(
         cache_path = db_path.parent / '.embeddings_cache.pkl'
         embedder = GameEmbedder(cache_path=cache_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         # Get user game metadata

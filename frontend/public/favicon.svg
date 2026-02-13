@@ -1,0 +1,17 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="32" height="32" rx="4" fill="#0a0a0a"/>
+
+  <!-- SC2 Text -->
+  <text x="16" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1a8fff" text-anchor="middle">SC2</text>
+
+  <!-- Analysis bars accent (top) -->
+  <rect x="6" y="5" width="2" height="4" fill="#1a8fff" opacity="0.6"/>
+  <rect x="10" y="3" width="2" height="6" fill="#1a8fff" opacity="0.8"/>
+  <rect x="14" y="4" width="2" height="5" fill="#1a8fff"/>
+  <rect x="18" y="2" width="2" height="7" fill="#1a8fff" opacity="0.8"/>
+  <rect x="22" y="4" width="2" height="5" fill="#1a8fff" opacity="0.6"/>
+
+  <!-- Border accent -->
+  <rect x="0" y="0" width="32" height="32" rx="4" stroke="#1a8fff" stroke-width="1" fill="none" opacity="0.3"/>
+</svg>

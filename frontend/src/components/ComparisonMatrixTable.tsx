@@ -19,7 +19,14 @@ interface MatrixRow {
   proAvg: number;
 }
 
-const KEY_TIMESTAMPS = [180, 360, 540, 720]; // 3min, 6min, 9min, 12min
+// Dynamic timestamps generated from game length (every 3 min up to game end)
+function generateTimestamps(maxSeconds: number): number[] {
+  const stamps: number[] = [];
+  for (let t = 180; t <= maxSeconds; t += 180) {
+    stamps.push(t);
+  }
+  return stamps;
+}
 
 const METRICS = [
   { key: 'worker_count', label: 'Workers', format: (v: number) => Math.round(v).toString() },
@@ -83,7 +90,7 @@ export default function ComparisonMatrixTable({
     };
 
     // Only use timestamps up to when the user's game ended
-    const validTimestamps = KEY_TIMESTAMPS.filter(t => t <= userGameLength);
+    const validTimestamps = generateTimestamps(userGameLength);
 
     validTimestamps.forEach((timestamp) => {
       // Skip if user's game has ended at this timestamp
@@ -169,7 +176,7 @@ export default function ComparisonMatrixTable({
   // Get game name
   const getGameName = (gameId: number): string => {
     const game = similarGames.find(g => g.game_id === gameId);
-    return game ? game.player1_name : `Game ${gameId}`;
+    return game ? (game.matched_player_name || game.player1_name) : `Game ${gameId}`;
   };
 
   // Color code cell based on comparison to average

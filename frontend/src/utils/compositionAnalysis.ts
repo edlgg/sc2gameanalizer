@@ -601,19 +601,30 @@ export function detectDecisionPoints(
 function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
   if (snapshots.length === 0) return null;
 
-  let closest = snapshots[0];
-  let minDiff = Math.abs(snapshots[0].game_time_seconds - targetTime);
-
-  for (let i = 1; i < snapshots.length; i++) {
-    const diff = Math.abs(snapshots[i].game_time_seconds - targetTime);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = snapshots[i];
+  // Binary search — snapshots are sorted by game_time_seconds
+  let lo = 0;
+  let hi = snapshots.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (snapshots[mid].game_time_seconds < targetTime) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
     }
+  }
+  // lo is now the first index >= targetTime; check lo and lo-1
+  let closest: Snapshot;
+  if (lo > 0) {
+    const prev = snapshots[lo - 1];
+    const curr = snapshots[lo];
+    closest = Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
+  } else {
+    closest = snapshots[lo];
   }
 
   // Only return if within 30 seconds
-  return minDiff <= 30 ? closest : null;
+  const diff = Math.abs(closest.game_time_seconds - targetTime);
+  return diff <= 30 ? closest : null;
 }
 
 /**
@@ -988,7 +999,11 @@ function detectTechDecision(
     if (userHas && !proHas) {
       divergence = true;
       userTech = building;
-      proTech = 'alternate path';
+      // Find what the pro actually built instead
+      const proAltBuildings = techBuildings.filter(b => b !== building && (proBuildings[b] || 0) > 0);
+      proTech = proAltBuildings.length > 0
+        ? proAltBuildings[0]
+        : 'no tech building';
     } else if (!userHas && proHas) {
       divergence = true;
       userTech = 'no ' + building;

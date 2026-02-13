@@ -6,6 +6,21 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 
+def get_connection(db_path: Path) -> sqlite3.Connection:
+    """
+    Create a database connection with foreign keys enabled.
+
+    Args:
+        db_path: Path to the SQLite database file
+
+    Returns:
+        sqlite3.Connection with PRAGMA foreign_keys = ON
+    """
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
 def init_database(db_path: Path) -> None:
     """
     Initialize the database with games and snapshots tables.
@@ -14,8 +29,13 @@ def init_database(db_path: Path) -> None:
     Args:
         db_path: Path to the SQLite database file
     """
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     cursor = conn.cursor()
+
+    # Enable WAL mode and performance PRAGMAs
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA cache_size=-64000")
 
     # Create games table (safe to call multiple times)
     cursor.execute("""
@@ -50,7 +70,7 @@ def init_database(db_path: Path) -> None:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS snapshots (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game_id INTEGER REFERENCES games(id),
+            game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
             game_time_seconds INTEGER,
             player_number INTEGER CHECK (player_number IN (1, 2)),
             race TEXT,
@@ -97,7 +117,7 @@ def init_database(db_path: Path) -> None:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS build_order_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game_id INTEGER REFERENCES games(id),
+            game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
             player_number INTEGER CHECK (player_number IN (1, 2)),
             event_type TEXT CHECK (event_type IN ('building', 'unit', 'upgrade')),
             item_name TEXT NOT NULL,
@@ -140,13 +160,25 @@ def init_database(db_path: Path) -> None:
         ON games(player1_race, player2_race)
     """)
 
+    # Composite index for the most common snapshot query pattern
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_snapshots_game_player_time
+        ON snapshots(game_id, player_number, game_time_seconds)
+    """)
+
+    # Composite index for similarity batch queries
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_games_pro_matchup
+        ON games(is_pro_replay, player1_race, player2_race)
+    """)
+
     conn.commit()
     conn.close()
 
 
 def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str) -> bool:
     """
-    Delete a game and all its related data (snapshots, build_order_events) by replay_file.
+    Delete a game and all its related data (snapshots, build_order_events, user_uploads) by replay_file.
 
     Args:
         conn: Database connection
@@ -166,22 +198,29 @@ def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str) -> bo
 
     game_id = result[0]
 
-    # Delete in order: build_order_events, snapshots, then game
+    # Delete in order: child tables first, then game
+    # Belt-and-suspenders with CASCADE — explicit deletes ensure cleanup
+    # even if FK enforcement is off on this connection
     cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
     cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+    try:
+        cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
+    except sqlite3.OperationalError:
+        pass  # user_uploads table may not exist in batch processing contexts
     cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
 
     conn.commit()
     return True
 
 
-def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any]) -> int:
+def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any], commit: bool = True) -> int:
     """
     Insert a game record into the database.
 
     Args:
         conn: Database connection
         game_data: Dictionary containing game metadata
+        commit: If True, commit the transaction after insert
 
     Returns:
         The game_id of the inserted record
@@ -214,11 +253,12 @@ def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any]) -> int:
         game_data.get('is_pro_replay', False)
     ))
 
-    conn.commit()
+    if commit:
+        conn.commit()
     return cursor.lastrowid
 
 
-def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dict[str, Any]]) -> None:
+def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dict[str, Any]], commit: bool = True) -> None:
     """
     Insert snapshot records into the database.
 
@@ -226,55 +266,44 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
         conn: Database connection
         game_id: The game_id to associate snapshots with
         snapshots: List of snapshot dictionaries
+        commit: If True, commit the transaction after insert
     """
     cursor = conn.cursor()
 
-    for snapshot in snapshots:
-        cursor.execute("""
-            INSERT INTO snapshots (
-                game_id, game_time_seconds, player_number, race,
-                worker_count, mineral_collection_rate, gas_collection_rate,
-                unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
-                army_value_minerals, army_value_gas, army_supply, units,
-                buildings, upgrades,
-                base_count, vision_area, unit_map_presence,
-                units_killed_value, units_lost_value,
-                resources_spent_minerals, resources_spent_gas,
-                collection_efficiency, spending_efficiency
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
+    cursor.executemany("""
+        INSERT INTO snapshots (
+            game_id, game_time_seconds, player_number, race,
+            worker_count, mineral_collection_rate, gas_collection_rate,
+            unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
+            army_value_minerals, army_value_gas, army_supply, units,
+            buildings, upgrades,
+            base_count, vision_area, unit_map_presence,
+            units_killed_value, units_lost_value,
+            resources_spent_minerals, resources_spent_gas,
+            collection_efficiency, spending_efficiency
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [
+        (
             game_id,
-            snapshot['game_time_seconds'],
-            snapshot['player_number'],
-            snapshot['race'],
-            snapshot['worker_count'],
-            snapshot['mineral_collection_rate'],
-            snapshot['gas_collection_rate'],
-            snapshot['unspent_minerals'],
-            snapshot['unspent_gas'],
-            snapshot['total_minerals_collected'],
-            snapshot['total_gas_collected'],
-            snapshot['army_value_minerals'],
-            snapshot['army_value_gas'],
-            snapshot['army_supply'],
-            snapshot['units'],
-            snapshot['buildings'],
-            snapshot['upgrades'],
-            snapshot['base_count'],
-            snapshot['vision_area'],
-            snapshot['unit_map_presence'],
-            snapshot['units_killed_value'],
-            snapshot['units_lost_value'],
-            snapshot['resources_spent_minerals'],
-            snapshot['resources_spent_gas'],
-            snapshot['collection_efficiency'],
-            snapshot['spending_efficiency']
-        ))
+            s['game_time_seconds'], s['player_number'], s['race'],
+            s['worker_count'], s['mineral_collection_rate'], s['gas_collection_rate'],
+            s['unspent_minerals'], s['unspent_gas'],
+            s['total_minerals_collected'], s['total_gas_collected'],
+            s['army_value_minerals'], s['army_value_gas'], s['army_supply'], s['units'],
+            s['buildings'], s['upgrades'],
+            s['base_count'], s['vision_area'], s['unit_map_presence'],
+            s['units_killed_value'], s['units_lost_value'],
+            s['resources_spent_minerals'], s['resources_spent_gas'],
+            s['collection_efficiency'], s['spending_efficiency']
+        )
+        for s in snapshots
+    ])
 
-    conn.commit()
+    if commit:
+        conn.commit()
 
 
-def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_number: int, events: List[Dict[str, Any]]) -> None:
+def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_number: int, events: List[Dict[str, Any]], commit: bool = True) -> None:
     """
     Insert build order events into the database.
 
@@ -283,21 +312,22 @@ def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_num
         game_id: The game_id to associate events with
         player_number: Player number (1 or 2)
         events: List of event dictionaries with keys: event_type, item_name, game_time_seconds, is_milestone
+        commit: If True, commit the transaction after insert
     """
     cursor = conn.cursor()
 
-    for event in events:
-        cursor.execute("""
-            INSERT OR IGNORE INTO build_order_events (
-                game_id, player_number, event_type, item_name, game_time_seconds, is_milestone
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            game_id,
-            player_number,
-            event['event_type'],
-            event['item_name'],
-            event['game_time_seconds'],
-            event.get('is_milestone', False)
-        ))
+    cursor.executemany("""
+        INSERT OR IGNORE INTO build_order_events (
+            game_id, player_number, event_type, item_name, game_time_seconds, is_milestone
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    """, [
+        (
+            game_id, player_number,
+            event['event_type'], event['item_name'],
+            event['game_time_seconds'], event.get('is_milestone', False)
+        )
+        for event in events
+    ])
 
-    conn.commit()
+    if commit:
+        conn.commit()

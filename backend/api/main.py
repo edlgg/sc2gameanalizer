@@ -26,7 +26,7 @@ import os
 from pydantic import BaseModel, EmailStr
 
 from backend.src.parser import parse_replay_file
-from backend.src.database import init_database
+from backend.src.database import init_database, get_connection
 from backend.api.similarity import find_similar_games
 from backend.api.ml_similarity import find_similar_games_ml, GameEmbedder
 from backend.api.auth import (
@@ -336,7 +336,7 @@ def verify_game_access(game_id: int, user: User) -> dict:
     - Pro replays (accessible to all authenticated users)
     - Their own uploaded games
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -550,7 +550,7 @@ async def create_crypto_payment(
             "address": payment.address,
             "amount": format_amount_display(payment.amount, token),
             "amount_raw": payment.amount,
-            "amount_exact": payment.amount / 1_000_000,  # Float for display (e.g., 19.001)
+            "amount_exact": payment.amount / 1_000_000,  # Float for display (e.g., 29.991)
             "token": token.value,
             "chain": payment_request.chain,
             "chain_id": chain_config["chain_id"],
@@ -627,7 +627,7 @@ async def get_user_pending_payment(user: User = Depends(require_auth)):
             "address": payment.address,
             "amount": format_amount_display(payment.amount, payment.token),
             "amount_raw": payment.amount,
-            "amount_exact": payment.amount / 1_000_000,  # Float for display (e.g., 19.001)
+            "amount_exact": payment.amount / 1_000_000,  # Float for display (e.g., 29.991)
             "token": payment.token.value,
             "chain": payment.chain,
             "chain_id": chain_config["chain_id"],
@@ -657,7 +657,7 @@ async def upload_replay(
 
     Requires authentication. Free users limited to 3 uploads/month.
     Pro users have unlimited uploads.
-    Rate limited to 10 requests per minute.
+    Rate limited to 20 requests per minute.
 
     Args:
         file: The .SC2Replay file to upload
@@ -665,7 +665,7 @@ async def upload_replay(
     Returns:
         Game metadata and ID of the parsed game
     """
-    check_rate_limit(request, max_requests=10, window_seconds=60)
+    check_rate_limit(request, max_requests=20, window_seconds=60)
 
     # Require authentication
     if not user:
@@ -701,7 +701,7 @@ async def upload_replay(
         parse_replay_file(permanent_path, DB_PATH)
 
         # Get the newly created game
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_connection(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, replay_file, game_date, game_length_seconds, map_name,
@@ -780,7 +780,7 @@ async def get_games(
     Returns:
         List of games with pagination info
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Base WHERE clause
@@ -890,7 +890,7 @@ async def get_snapshots(
     # Verify user has access to this game
     verify_game_access(game_id, user)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         query = f"""
@@ -971,7 +971,7 @@ async def get_snapshots_race_matched(
     verify_game_access(game_id, user)
     verify_game_access(user_game_id, user)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Get user's race
@@ -1046,7 +1046,7 @@ async def compare_games(
     verify_game_access(game_id1, user)
     verify_game_access(game_id2, user)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Get both games
@@ -1143,7 +1143,7 @@ async def get_build_order(
     # Verify user has access to this game
     verify_game_access(game_id, user)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         query = """
@@ -1211,7 +1211,7 @@ async def compare_build_orders(
     for pro_id in pro_ids:
         verify_game_access(pro_id, user)
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Get user build order events
@@ -1324,7 +1324,7 @@ async def delete_game(game_id: int, user: User = Depends(require_auth)):
     Returns:
         Success message
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Check if user owns this game (via user_uploads table)
@@ -1347,7 +1347,10 @@ async def delete_game(game_id: int, user: User = Depends(require_auth)):
 
         replay_file = row[0]
 
-        # Delete from database (CASCADE will delete snapshots and build_order_events)
+        # Delete from database — explicit child table deletes as belt-and-suspenders with CASCADE
+        cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
+        cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+        cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
         cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
         conn.commit()
 
@@ -1371,7 +1374,7 @@ async def delete_all_games(user: User = Depends(require_auth), keep_pro_replays:
     Returns:
         Success message with count of deleted games
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    with get_connection(DB_PATH) as conn:
         cursor = conn.cursor()
 
         # Only delete games that belong to the current user
@@ -1393,12 +1396,12 @@ async def delete_all_games(user: User = Depends(require_auth), keep_pro_replays:
         replay_files = [row[1] for row in rows]
         game_count = len(rows)
 
-        # Delete from database - only the user's games
+        # Delete from database — explicit child table deletes as belt-and-suspenders with CASCADE
         if game_ids:
             placeholders = ','.join('?' * len(game_ids))
-            # Delete user_uploads entries
+            cursor.execute(f"DELETE FROM build_order_events WHERE game_id IN ({placeholders})", game_ids)
+            cursor.execute(f"DELETE FROM snapshots WHERE game_id IN ({placeholders})", game_ids)
             cursor.execute(f"DELETE FROM user_uploads WHERE game_id IN ({placeholders})", game_ids)
-            # Delete games
             cursor.execute(f"DELETE FROM games WHERE id IN ({placeholders})", game_ids)
 
         conn.commit()

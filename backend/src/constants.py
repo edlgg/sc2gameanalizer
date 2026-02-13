@@ -64,6 +64,17 @@ UNIT_COSTS = {
     'Viper': {'minerals': 100, 'gas': 200, 'supply': 3},
 }
 
+# Morph relationships: target → (source, count consumed)
+# Used to fix double-counting when source unit transforms into target
+MORPH_SOURCES = {
+    'Baneling': ('Zergling', 1),
+    'Ravager': ('Roach', 1),
+    'Lurker': ('Hydralisk', 1),
+    'BroodLord': ('Corruptor', 1),
+    'Overseer': ('Overlord', 1),
+    'Archon': ('HighTemplar', 2),  # Merges 2 Templar (HT or DT)
+}
+
 # Worker units for each race
 WORKER_UNITS = {'SCV', 'Probe', 'Drone'}
 

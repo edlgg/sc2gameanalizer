@@ -1,8 +1,9 @@
 """
 Validation logic for snapshot database.
 """
-import sqlite3
 from pathlib import Path
+
+from backend.src.database import get_connection
 
 
 def main():
@@ -36,7 +37,7 @@ def validate_database_counts(db_path: Path) -> None:
     print("Database Counts:")
     print("-" * 40)
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     # Count games
@@ -60,7 +61,7 @@ def validate_sanity_checks(db_path: Path) -> None:
     print("Sanity Checks (Outlier Detection):")
     print("-" * 40)
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
 
     checks = [
         ("worker_count", 0, 200),
@@ -105,7 +106,7 @@ def validate_against_game_stats(db_path: Path) -> None:
     print("Game Statistics Summary:")
     print("-" * 40)
 
-    conn = sqlite3.connect(db_path)
+    conn = get_connection(db_path)
     cursor = conn.cursor()
 
     # Get final snapshot statistics for each game

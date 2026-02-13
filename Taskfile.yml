@@ -66,6 +66,14 @@ tasks:
       - uv sync --project backend --extra dev
       - cd frontend && npm install
 
+  # User management
+  user-approve:
+    desc: Upgrade a user to Pro subscription by email
+    cmds:
+      - uv run --project backend python -m backend.scripts.approve_user --email={{.EMAIL}}
+    requires:
+      vars: [EMAIL]
+
   # Build for production
   build:
     desc: Build frontend for production

@@ -1,6 +1,16 @@
-import { motion, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
-import { useRef, useState, useCallback } from 'react';
-import { ChevronDown, Upload, Database, BarChart3, Sparkles, TrendingUp, Target } from 'lucide-react';
+import { useRef, useEffect, useCallback } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
+import Lenis from 'lenis';
+
+gsap.registerPlugin(ScrollTrigger);
+
+function formatStat(n: number): string {
+  if (n >= 1000000) return Math.round(n / 1000000).toLocaleString() + 'M+';
+  if (n >= 1000) return Math.round(n / 1000).toLocaleString() + 'K+';
+  return n.toLocaleString();
+}
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -8,780 +18,1197 @@ interface LandingPageProps {
 }
 
 // ============================================
-// SECTION 1: CINEMATIC HERO
+// UTILITY: Split text into character spans
 // ============================================
+function SplitChars({ text, className }: { text: string; className?: string }) {
+  return (
+    <span className={className}>
+      {text.split('').map((char, i) => (
+        <span
+          key={i}
+          className="ed-char"
+          data-char-index={i}
+        >
+          {char === ' ' ? '\u00A0' : char}
+        </span>
+      ))}
+    </span>
+  );
+}
 
-function HeroSection({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
+// ============================================
+// SECTION 1: HERO
+// ============================================
+function HeroSection({ onRegister }: { onRegister: () => void }) {
+  const heroRef = useRef<HTMLElement>(null);
+  const magneticRef = useRef<HTMLDivElement>(null);
+  const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const editionRef = useRef<HTMLDivElement>(null);
+  const scrollIndicatorRef = useRef<HTMLDivElement>(null);
+  const ctaRef = useRef<HTMLButtonElement>(null);
+  const freeBadgeRef = useRef<HTMLDivElement>(null);
+  const ctaSubtextRef = useRef<HTMLDivElement>(null);
 
-  const springConfig = { damping: 25, stiffness: 150 };
-  const rotateX = useSpring(useTransform(mouseY, [-300, 300], [5, -5]), springConfig);
-  const rotateY = useSpring(useTransform(mouseX, [-300, 300], [-5, 5]), springConfig);
+  // Hero entrance animations
+  useGSAP(() => {
+    const tl = gsap.timeline({ delay: 0.5 });
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (rect) {
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      mouseX.set(e.clientX - centerX);
-      mouseY.set(e.clientY - centerY);
-    }
-  }, [mouseX, mouseY]);
+    tl.to(freeBadgeRef.current, {
+      opacity: 1, duration: 0.8, ease: 'power2.out',
+    })
+    .to('.ed-hero-title-line:nth-child(1) .word-inner', {
+      y: 0, duration: 1.2, ease: 'power4.out',
+    }, '-=0.5')
+    .to('.ed-hero-title-line:nth-child(2) .word-inner', {
+      y: 0, duration: 1.2, ease: 'power4.out',
+    }, '-=0.9')
+    .to('.ed-hero-title-line:nth-child(3) .word-inner', {
+      y: 0, duration: 1.2, ease: 'power4.out',
+    }, '-=0.9')
+    .to(subtitleRef.current, {
+      opacity: 1, duration: 1, ease: 'power2.out',
+    }, '-=0.5')
+    .to(editionRef.current, {
+      opacity: 1, duration: 0.8, ease: 'power2.out',
+    }, '-=0.3')
+    .to(scrollIndicatorRef.current, {
+      opacity: 1, duration: 0.8, ease: 'power2.out',
+    }, '-=0.3');
 
-  const handleMouseLeave = useCallback(() => {
-    mouseX.set(0);
-    mouseY.set(0);
-  }, [mouseX, mouseY]);
+    // Hide scroll indicator on scroll
+    ScrollTrigger.create({
+      trigger: heroRef.current,
+      start: 'top top',
+      end: '+=200',
+      onLeave: () => gsap.to(scrollIndicatorRef.current, { opacity: 0, duration: 0.3 }),
+      onEnterBack: () => gsap.to(scrollIndicatorRef.current, { opacity: 1, duration: 0.3 }),
+    });
+
+    // CTA entrance
+    gsap.from(ctaRef.current, {
+      opacity: 0, y: 20, duration: 1, ease: 'power3.out', delay: 2,
+    });
+    gsap.from(ctaSubtextRef.current, {
+      opacity: 0, y: 10, duration: 0.8, ease: 'power3.out', delay: 2.2,
+    });
+
+    // Stats counter animation
+    heroRef.current?.querySelectorAll<HTMLElement>('.ed-hero-stat-number[data-count]').forEach(el => {
+      const target = parseInt(el.dataset.count || '0');
+      ScrollTrigger.create({
+        trigger: el,
+        start: 'top 85%',
+        once: true,
+        onEnter: () => {
+          gsap.to(el, {
+            innerText: target,
+            duration: 2,
+            ease: 'power2.out',
+            snap: { innerText: 1 },
+            onUpdate() {
+              el.innerText = formatStat(Math.round(parseFloat(el.innerText)));
+            },
+          });
+        },
+      });
+    });
+
+    // Badge pulse
+    gsap.to('.ed-hero-image-badge', {
+      opacity: 0.7, duration: 1.5, repeat: -1, yoyo: true, ease: 'sine.inOut',
+    });
+  }, { scope: heroRef });
+
+  // Magnetic effect on hero image
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!magneticRef.current) return;
+    const rect = magneticRef.current.getBoundingClientRect();
+    const distX = (e.clientX - (rect.left + rect.width / 2)) * 0.03;
+    const distY = (e.clientY - (rect.top + rect.height / 2)) * 0.03;
+    gsap.to(magneticRef.current, {
+      x: distX, y: distY + 20, rotation: -3 + distX * 0.05,
+      duration: 0.8, ease: 'power3.out',
+    });
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => document.removeEventListener('mousemove', handleMouseMove);
+  }, [handleMouseMove]);
 
   return (
-    <section
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="relative min-h-screen flex flex-col items-center justify-center px-4 pt-20 overflow-hidden"
-    >
-      {/* Particle field background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(40)].map((_, i) => (
-          <div
-            key={i}
-            className="particle"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${4 + Math.random() * 4}s`,
-              opacity: 0.2 + Math.random() * 0.4,
-              width: `${2 + Math.random() * 4}px`,
-              height: `${2 + Math.random() * 4}px`,
-            }}
-          />
+    <section ref={heroRef} className="ed-hero" id="hero">
+      <div className="ed-hero-bg-grid" />
+      <div className="ed-hero-bg-gradient" />
+
+      <div ref={freeBadgeRef} className="ed-hero-free-badge">
+        FREE TIER — 3 UPLOADS/MONTH — NO INFORMATION REQUIRED
+      </div>
+
+      <div ref={editionRef} className="ed-hero-edition-label">
+        COMPETITIVE ANALYSIS PLATFORM — STARCRAFT II
+      </div>
+
+      <div className="ed-hero-inner">
+        <div className="ed-hero-text">
+          <span className="ed-hero-title-line">
+            <span className="word-inner">LEVEL UP</span>
+          </span>
+          <span className="ed-hero-title-line">
+            <span className="word-inner">YOUR</span>
+          </span>
+          <span className="ed-hero-title-line">
+            <span className="word-inner">STARCRAFT II</span>
+          </span>
+        </div>
+        <div className="ed-hero-image-wrap">
+          <div ref={magneticRef} className="ed-hero-image-magnetic" style={{ transform: 'rotate(-3deg) translateY(20px)' }}>
+            <img
+              src="/assets/screenshots/hero-radar-comparison.png"
+              alt="Radar comparison chart showing player metrics versus professional benchmarks"
+            />
+            <div className="ed-hero-image-badge">PRO COMPARISON</div>
+          </div>
+        </div>
+      </div>
+
+      <p ref={subtitleRef} className="ed-hero-subtitle">
+        Upload replays. Compare to pros. Learn why you're falling behind.
+      </p>
+
+      <div ref={scrollIndicatorRef} className="ed-hero-scroll-indicator">
+        <span>SCROLL</span>
+        <div className="ed-hero-scroll-line" />
+      </div>
+
+      <div className="ed-hero-stats">
+        {[
+          { count: 10000, label: 'Data Points Per Game' },
+          { count: 850, label: 'Pro Replays Analyzed' },
+          { count: 23, label: 'Metrics Tracked' },
+          { count: 1, label: 'Sub-Second Analysis' },
+        ].map(stat => (
+          <div key={stat.label} className="flex flex-col">
+            <span className="ed-hero-stat-number" data-count={stat.count}>0</span>
+            <span className="ed-hero-stat-label">{stat.label}</span>
+          </div>
         ))}
       </div>
 
-      {/* Gradient orbs */}
-      <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-sc2-blue/10 rounded-full blur-[150px]" />
-      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-sc2-purple/10 rounded-full blur-[150px]" />
-
-      {/* 3D Floating Dashboard Screenshot */}
-      <motion.div
-        className="relative z-10 w-full max-w-5xl mb-12"
-        style={{
-          rotateX,
-          rotateY,
-          transformStyle: 'preserve-3d',
-        }}
-        initial={{ opacity: 0, y: 50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1, delay: 0.2 }}
-      >
-        <div className="relative rounded-2xl overflow-hidden glow-intense">
-          <div className="relative border border-white/10 rounded-2xl overflow-hidden">
-            <img
-              src="/assets/screenshots/dashboard.png"
-              alt="SC2 Replay Analyzer Dashboard"
-              className="w-full"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e17] via-transparent to-transparent opacity-40" />
-          </div>
+      <div className="ed-hero-cta-wrap">
+        <button ref={ctaRef} className="ed-hero-cta" onClick={onRegister}>
+          GET STARTED FREE →
+        </button>
+        <div ref={ctaSubtextRef} className="ed-cta-subtext">
+          No information required • 3 uploads/month
         </div>
-      </motion.div>
+      </div>
 
-      {/* Hero Text */}
-      <motion.div
-        className="text-center z-10 mb-12"
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.5 }}
-      >
-        <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 tracking-tight">
-          Level Up Your StarCraft II
-        </h1>
-        <p className="text-xl md:text-2xl text-slate-400 max-w-3xl mx-auto mb-10">
-          Upload replays. Compare to pros. Learn why you're falling behind.
-        </p>
-
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <motion.button
-            onClick={onRegister}
-            className="group relative px-8 py-4 rounded-xl font-semibold text-lg overflow-hidden rainbow-border rainbow-border-glow"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <span className="relative text-white flex items-center gap-2 justify-center">
-              <Sparkles className="w-5 h-5" />
-              Get Started Free
-            </span>
-          </motion.button>
-          <motion.button
-            onClick={onLogin}
-            className="px-8 py-4 rounded-xl font-semibold text-lg glass text-white hover:bg-white/10 transition-all"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            Sign In &rarr;
-          </motion.button>
-        </div>
-      </motion.div>
-
-      {/* Floating Stats Cards */}
-      <motion.div
-        className="flex flex-wrap justify-center gap-8 z-10"
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.8 }}
-      >
-        <FloatingStatCard value="12,847" label="games analyzed" delay={0} />
-        <FloatingStatCard value="94%" label="find insights" delay={0.1} />
-        <FloatingStatCard value="<3s" label="analysis time" delay={0.2} />
-      </motion.div>
-
-      {/* Scroll indicator */}
-      <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        animate={{ y: [0, 10, 0] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        <ChevronDown className="w-8 h-8 text-slate-500" />
-      </motion.div>
+      <div className="ed-hero-divider" />
     </section>
   );
 }
 
-function FloatingStatCard({ value, label, delay }: { value: string; label: string; delay: number }) {
-  return (
-    <motion.div
-      className="glass-card rounded-xl px-6 py-4 text-center animate-float"
-      style={{ animationDelay: `${delay * 2}s` }}
-      whileHover={{ scale: 1.05, y: -5 }}
-    >
-      <div className="text-3xl font-bold text-white">{value}</div>
-      <div className="text-sm text-slate-400">{label}</div>
-    </motion.div>
-  );
-}
-
 // ============================================
-// SECTION 2: BENTO GRID FEATURES
+// EDITORIAL DIVIDER
 // ============================================
+function EditorialDivider({ text }: { text: string }) {
+  const ref = useRef<HTMLDivElement>(null);
 
-function BentoGridSection() {
+  useGSAP(() => {
+    const lines = ref.current?.querySelectorAll('.ed-divider-line');
+    const textEl = ref.current?.querySelector('.ed-divider-text');
+
+    if (lines) {
+      gsap.fromTo(lines, { scaleX: 0 }, {
+        scaleX: 1, duration: 1.2, ease: 'power3.out',
+        scrollTrigger: { trigger: ref.current, start: 'top 85%', toggleActions: 'play none none none' },
+      });
+    }
+    if (textEl) {
+      gsap.fromTo(textEl, { opacity: 0 }, {
+        opacity: 1, duration: 0.8, ease: 'power2.out',
+        scrollTrigger: { trigger: ref.current, start: 'top 85%', toggleActions: 'play none none none' },
+        delay: 0.4,
+      });
+    }
+  }, { scope: ref });
+
   return (
-    <section className="py-32 px-4 relative">
-      <div className="max-w-6xl mx-auto">
-        <motion.div
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Everything You Need
-          </h2>
-          <p className="text-xl text-slate-400">
-            Professional-grade analysis tools in one place
-          </p>
-        </motion.div>
-
-        {/* Bento Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[200px]">
-          {/* Large card - Game Library */}
-          <BentoCard
-            className="md:col-span-2 md:row-span-2"
-            delay={0}
-            image="/assets/screenshots/full-page-multi-game-comparison.png"
-            title="Multi-Pro Comparison"
-            description="Compare your game against multiple pros simultaneously with detailed analytics"
-          />
-
-          {/* Tall card - Instant Upload */}
-          <BentoCard
-            className="md:row-span-2"
-            delay={0.1}
-            icon={<Upload className="w-8 h-8" />}
-            title="Instant Upload"
-            description="Drag & drop your .SC2Replay files for instant analysis"
-            centered
-          />
-
-          {/* Small card - Pro Database */}
-          <BentoCard
-            delay={0.2}
-            icon={<Database className="w-6 h-6" />}
-            title="Pro Match Database"
-            description="10,000+ tournament replays"
-            compact
-          />
-
-          {/* Wide card - Deep Analytics */}
-          <BentoCard
-            className="md:col-span-2"
-            delay={0.3}
-            image="/assets/screenshots/strategic-decision-analysis-complete.png"
-            title="Decision Analysis"
-            description="See exactly where your choices diverged from optimal play"
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function BentoCard({
-  className = '',
-  delay,
-  image,
-  icon,
-  title,
-  description,
-  centered = false,
-  compact = false,
-}: {
-  className?: string;
-  delay: number;
-  image?: string;
-  icon?: React.ReactNode;
-  title: string;
-  description: string;
-  centered?: boolean;
-  compact?: boolean;
-}) {
-  return (
-    <motion.div
-      className={`group relative glass-card rounded-2xl overflow-hidden transition-all duration-300 hover:border-white/20 ${className}`}
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay }}
-      whileHover={{ y: -8 }}
-    >
-      {image && (
-        <div className="absolute inset-0 overflow-hidden">
-          <img
-            src={image}
-            alt={title}
-            className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e17] via-[#0a0e17]/60 to-transparent" />
-        </div>
-      )}
-
-      <div className={`relative z-10 h-full flex flex-col ${centered ? 'items-center justify-center text-center' : 'justify-end'} p-6`}>
-        {icon && (
-          <div className="w-16 h-16 bg-sc2-blue/20 rounded-2xl flex items-center justify-center text-sc2-blue mb-4 animate-pulse-glow">
-            {icon}
-          </div>
-        )}
-        <h3 className={`${compact ? 'text-lg' : 'text-2xl'} font-bold text-white mb-2`}>{title}</h3>
-        <p className={`${compact ? 'text-sm' : ''} text-slate-400`}>{description}</p>
-      </div>
-
-      <div className="absolute inset-0 rounded-2xl border border-transparent bg-gradient-to-br from-sc2-blue/0 via-transparent to-sc2-purple/0 group-hover:from-sc2-blue/20 group-hover:to-sc2-purple/20 transition-all duration-300 pointer-events-none" />
-    </motion.div>
-  );
-}
-
-// ============================================
-// SECTION 3: TIMELINE CHARTS SHOWCASE
-// ============================================
-
-function TimelineChartsSection() {
-  return (
-    <section className="py-32 px-4 relative mesh-gradient">
-      <div className="max-w-6xl mx-auto">
-        <motion.div
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Track Every Moment
-          </h2>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-            Real-time performance charts show exactly when you fell behind or pulled ahead
-          </p>
-        </motion.div>
-
-        {/* Side by side chart showcases */}
-        <div className="grid md:grid-cols-2 gap-8">
-          <motion.div
-            className="glass-card rounded-2xl overflow-hidden"
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            whileHover={{ y: -5 }}
-          >
-            <img
-              src="/assets/screenshots/worker-chart-closeup.png"
-              alt="Worker Count Timeline"
-              className="w-full"
-            />
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-yellow-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Worker Count</h3>
-              </div>
-              <p className="text-slate-400">Compare your economy timing against pro benchmarks</p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            className="glass-card rounded-2xl overflow-hidden"
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            whileHover={{ y: -5 }}
-          >
-            <img
-              src="/assets/screenshots/army-chart-closeup.png"
-              alt="Army Value Timeline"
-              className="w-full"
-            />
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                  <Target className="w-5 h-5 text-red-400" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Army Value</h3>
-              </div>
-              <p className="text-slate-400">Track military power throughout every engagement</p>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Feature highlights */}
-        <motion.div
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <FeatureHighlight label="Pro Comparison" />
-          <FeatureHighlight label="Range Bands" />
-          <FeatureHighlight label="Key Moments" />
-          <FeatureHighlight label="Multi-Game Average" />
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-function FeatureHighlight({ label }: { label: string }) {
-  return (
-    <div className="glass rounded-lg px-4 py-3 text-center">
-      <span className="text-sm text-slate-300">{label}</span>
+    <div ref={ref} className="ed-divider">
+      <div className="ed-divider-line" />
+      <div className="ed-divider-text">{text}</div>
+      <div className="ed-divider-line" />
     </div>
   );
 }
 
 // ============================================
-// SECTION 4: DECISION ANALYSIS SHOWCASE
+// SECTION 2: FEATURES — MAGAZINE SPREAD
 // ============================================
+const featureItems = [
+  { num: '01', image: '/assets/screenshots/game-overview-pvp.png', title: 'Complete Game Overview', desc: 'Every metric at a glance. Map control, economy, army value, and more in a single view.', tags: ['Dashboard', 'Real-time'], cls: 'ed-feature-item-1' },
+  { num: '02', image: '/assets/screenshots/comparison-matrix-pvt.png', title: 'Comparison Matrix', desc: 'Head-to-head metric analysis against professional benchmarks.', tags: ['Comparison', '23 Metrics'], cls: 'ed-feature-item-2' },
+  { num: '03', image: '/assets/screenshots/combat-trade-zvp.png', title: 'Combat Trade Analysis', desc: 'Understand the value exchanges in every engagement throughout the game.', tags: ['Combat', 'Engagement'], cls: 'ed-feature-item-3' },
+  { num: '04', image: '/assets/screenshots/cumulative-spending-pvp.png', title: 'Spending Patterns', desc: 'Track how resources flow across the entire game. Compare your spending habits to the pros.', tags: ['Economy', 'Resources'], cls: 'ed-feature-item-4' },
+];
 
-function DecisionAnalysisSection() {
+function FeaturesSection() {
+  const ref = useRef<HTMLElement>(null);
+  const textCardRef = useRef<HTMLDivElement>(null);
+  const textCardNumberRef = useRef<HTMLDivElement>(null);
+  const pricingCalloutRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    // Header characters
+    ref.current?.querySelectorAll<HTMLElement>('.ed-features-header-line .ed-char').forEach((char, i) => {
+      gsap.to(char, {
+        opacity: 1, y: 0, rotation: 0, duration: 0.6, ease: 'power3.out',
+        scrollTrigger: { trigger: '.ed-features-header', start: 'top 80%', toggleActions: 'play none none none' },
+        delay: i * 0.03,
+      });
+    });
+
+    // Callouts
+    ref.current?.querySelectorAll<HTMLElement>('.ed-feature-callout').forEach(el => {
+      gsap.to(el, {
+        opacity: 1, y: 0, duration: 1, ease: 'power3.out',
+        scrollTrigger: { trigger: el, start: 'top 85%', toggleActions: 'play none none none' },
+      });
+    });
+
+    // Pricing callout
+    if (pricingCalloutRef.current) {
+      gsap.to(pricingCalloutRef.current, {
+        opacity: 1, y: 0, duration: 1, ease: 'power3.out',
+        scrollTrigger: { trigger: pricingCalloutRef.current, start: 'top 85%', toggleActions: 'play none none none' },
+      });
+    }
+
+    // Feature items
+    ref.current?.querySelectorAll<HTMLElement>('.ed-feature-item').forEach((item, index) => {
+      const isOdd = index % 2 === 1;
+      const rotations = [2, -3, 1, -1];
+      gsap.fromTo(item,
+        { opacity: 0, x: isOdd ? 80 : -80, rotation: isOdd ? -3 : 3 },
+        {
+          opacity: 1, x: 0, rotation: rotations[index], duration: 1.2, ease: 'power3.out',
+          scrollTrigger: { trigger: item, start: 'top 85%', toggleActions: 'play none none none' },
+        }
+      );
+    });
+
+    // Feature text card
+    if (textCardRef.current) {
+      gsap.fromTo(textCardRef.current,
+        { opacity: 0, scale: 0.9 },
+        {
+          opacity: 1, scale: 1, duration: 1, ease: 'power3.out',
+          scrollTrigger: { trigger: textCardRef.current, start: 'top 85%', toggleActions: 'play none none none' },
+        }
+      );
+
+      // Border glow
+      ScrollTrigger.create({
+        trigger: textCardRef.current,
+        start: 'top 80%',
+        end: 'bottom 20%',
+        onEnter: () => { if (textCardRef.current) textCardRef.current.style.borderColor = 'var(--ed-blue)'; },
+        onLeave: () => { if (textCardRef.current) textCardRef.current.style.borderColor = 'var(--ed-gray-mid)'; },
+        onEnterBack: () => { if (textCardRef.current) textCardRef.current.style.borderColor = 'var(--ed-blue)'; },
+        onLeaveBack: () => { if (textCardRef.current) textCardRef.current.style.borderColor = 'var(--ed-gray-mid)'; },
+      });
+    }
+
+    // Counter
+    if (textCardNumberRef.current) {
+      ScrollTrigger.create({
+        trigger: textCardNumberRef.current,
+        start: 'top 85%',
+        once: true,
+        onEnter: () => {
+          gsap.to(textCardNumberRef.current, {
+            innerText: 500000,
+            duration: 2.5,
+            ease: 'power2.out',
+            snap: { innerText: 1 },
+            onUpdate() {
+              if (textCardNumberRef.current) {
+                textCardNumberRef.current.innerText = formatStat(Math.round(parseFloat(textCardNumberRef.current.innerText)));
+              }
+            },
+          });
+        },
+      });
+    }
+
+    // Background text parallax
+    gsap.to('.ed-features-bg-text', {
+      y: -100, ease: 'none',
+      scrollTrigger: { trigger: ref.current, start: 'top bottom', end: 'bottom top', scrub: true },
+    });
+
+    // Feature number parallax
+    ref.current?.querySelectorAll('.ed-feature-number').forEach(num => {
+      gsap.to(num, {
+        y: -60, ease: 'none',
+        scrollTrigger: { trigger: num, start: 'top bottom', end: 'bottom top', scrub: true },
+      });
+    });
+
+    // Feature image parallax
+    ref.current?.querySelectorAll<HTMLElement>('.ed-feature-item img').forEach((img, i) => {
+      const dir = i % 2 === 0 ? 1 : -1;
+      gsap.fromTo(img, { y: 30 * dir }, {
+        y: -30 * dir, ease: 'none',
+        scrollTrigger: { trigger: img, start: 'top bottom', end: 'bottom top', scrub: true },
+      });
+    });
+  }, { scope: ref });
+
+  // Image tilt on hover
+  const handleImageMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    gsap.to(el, { rotateY: x * 5, rotateX: -y * 5, duration: 0.6, ease: 'power2.out', transformPerspective: 800 });
+  }, []);
+
+  const handleImageMouseLeave = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    gsap.to(e.currentTarget, { rotateY: 0, rotateX: 0, duration: 0.8, ease: 'elastic.out(1, 0.5)' });
+  }, []);
+
   return (
-    <section className="py-32 px-4 relative">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Text content */}
-          <motion.div
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Understand Your
-              <span className="text-sc2-purple"> Decisions</span>
-            </h2>
-            <p className="text-xl text-slate-400 mb-8">
-              Our AI analyzes your key decision points - tech choices, army composition,
-              timing attacks - and compares them against what the pros would do.
-            </p>
+    <section ref={ref} className="ed-features" id="features">
+      <div className="ed-features-bg-text">ANALYZED</div>
 
-            <div className="space-y-4">
-              <DecisionPoint
-                time="5:00"
-                label="Tech Path"
-                yourChoice="Stargate"
-                proChoice="Alternate path"
-                verdict="Good Choice"
-                positive
-              />
-              <DecisionPoint
-                time="7:00"
-                label="Army Comp"
-                yourChoice="Adept-based (3 units)"
-                proChoice="Oracle-based (1 unit)"
-                verdict="Pro Approach Better"
-                positive={false}
-              />
+      <div className="ed-features-header">
+        <span className="ed-features-header-line"><SplitChars text="EVERY" /></span>
+        <span className="ed-features-header-line"><SplitChars text="THING" /></span>
+        <span className="ed-features-header-line"><SplitChars text="YOU NEED" /></span>
+      </div>
+
+      {/* First callout */}
+      <div className="ed-feature-callout">
+        FULL GAME <span className="accent">OVERVIEW</span>
+      </div>
+
+      <div className="ed-features-masonry">
+        {featureItems.map((feat, i) => (
+          <div key={feat.num}>
+            {/* Callout after feature 0 */}
+            {i === 1 && (
+              <div className="ed-feature-callout right">
+                SIDE-BY-SIDE <span className="accent">METRICS</span>
+              </div>
+            )}
+
+            <div className={`ed-feature-item ${feat.cls}`}>
+              <div className="ed-feature-image-wrap" onMouseMove={handleImageMouseMove} onMouseLeave={handleImageMouseLeave}>
+                <span className="ed-feature-number">{feat.num}</span>
+                <img src={feat.image} alt={feat.title} />
+              </div>
+              <div className="ed-feature-title">{feat.title}</div>
+              <div className="ed-feature-desc">{feat.desc}</div>
+              <div className="ed-feature-meta">
+                {feat.tags.map((tag, j) => (
+                  <span key={tag}>
+                    {j > 0 && <span className="ed-feature-meta-dot" />}
+                    <span className="ed-feature-meta-tag">{tag}</span>
+                  </span>
+                ))}
+              </div>
             </div>
-          </motion.div>
 
-          {/* Screenshot */}
-          <motion.div
-            className="relative"
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-sc2-purple/20 to-sc2-blue/20 blur-3xl -z-10" />
-            <div className="glass-card rounded-2xl overflow-hidden">
-              <img
-                src="/assets/screenshots/strategic-decision-analysis-complete.png"
-                alt="Decision Analysis"
-                className="w-full"
-              />
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function DecisionPoint({
-  time,
-  label,
-  yourChoice,
-  proChoice,
-  verdict,
-  positive,
-}: {
-  time: string;
-  label: string;
-  yourChoice: string;
-  proChoice: string;
-  verdict: string;
-  positive: boolean;
-}) {
-  return (
-    <motion.div
-      className="glass-card rounded-xl p-4"
-      whileHover={{ x: 5 }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <span className="text-sc2-blue font-mono font-bold">{time}</span>
-          <span className="text-white font-semibold">{label}</span>
-        </div>
-        <span className={`text-sm px-3 py-1 rounded-full ${positive ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-          {verdict}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div className="bg-sc2-blue/10 rounded-lg p-2">
-          <div className="text-slate-500 text-xs mb-1">Your Choice</div>
-          <div className="text-slate-300">{yourChoice}</div>
-        </div>
-        <div className="bg-slate-800/50 rounded-lg p-2">
-          <div className="text-slate-500 text-xs mb-1">Pro Choice</div>
-          <div className="text-slate-300">{proChoice}</div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ============================================
-// SECTION 5: RACE SHOWCASE
-// ============================================
-
-function RaceShowcaseSection() {
-  const [hoveredRace, setHoveredRace] = useState<string | null>(null);
-
-  return (
-    <section className="py-32 px-4 relative overflow-hidden">
-      <div className="max-w-6xl mx-auto">
-        <motion.div
-          className="text-center mb-16"
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Built for Every Race
-          </h2>
-          <p className="text-xl text-slate-400">
-            Tailored analysis for your playstyle
-          </p>
-        </motion.div>
-
-        {/* Race Cards */}
-        <div className="flex flex-col md:flex-row gap-6">
-          <RaceCard
-            race="Terran"
-            icon="T"
-            tagline="Mechanical Precision"
-            color="from-blue-500 to-cyan-500"
-            pattern="terran-pattern"
-            bgColor="bg-blue-500/5"
-            isHovered={hoveredRace === 'Terran'}
-            isOtherHovered={hoveredRace !== null && hoveredRace !== 'Terran'}
-            onHover={() => setHoveredRace('Terran')}
-            onLeave={() => setHoveredRace(null)}
-          />
-          <RaceCard
-            race="Zerg"
-            icon="Z"
-            tagline="Adaptive Evolution"
-            color="from-purple-500 to-pink-500"
-            pattern="zerg-pattern"
-            bgColor="bg-purple-500/5"
-            isHovered={hoveredRace === 'Zerg'}
-            isOtherHovered={hoveredRace !== null && hoveredRace !== 'Zerg'}
-            onHover={() => setHoveredRace('Zerg')}
-            onLeave={() => setHoveredRace(null)}
-          />
-          <RaceCard
-            race="Protoss"
-            icon="P"
-            tagline="Elegant Power"
-            color="from-yellow-400 to-amber-500"
-            pattern="protoss-pattern"
-            bgColor="bg-yellow-500/5"
-            isHovered={hoveredRace === 'Protoss'}
-            isOtherHovered={hoveredRace !== null && hoveredRace !== 'Protoss'}
-            onHover={() => setHoveredRace('Protoss')}
-            onLeave={() => setHoveredRace(null)}
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function RaceCard({
-  race,
-  icon,
-  tagline,
-  color,
-  pattern,
-  bgColor,
-  isHovered,
-  isOtherHovered,
-  onHover,
-  onLeave,
-}: {
-  race: string;
-  icon: string;
-  tagline: string;
-  color: string;
-  pattern: string;
-  bgColor: string;
-  isHovered: boolean;
-  isOtherHovered: boolean;
-  onHover: () => void;
-  onLeave: () => void;
-}) {
-  return (
-    <motion.div
-      className={`relative flex-1 min-h-[300px] rounded-2xl overflow-hidden glass-card ${pattern} transition-all duration-500 cursor-pointer`}
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      animate={{
-        flex: isHovered ? 1.5 : isOtherHovered ? 0.75 : 1,
-      }}
-      onMouseEnter={onHover}
-      onMouseLeave={onLeave}
-    >
-      <div className={`absolute inset-0 ${bgColor} transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-50'}`} />
-
-      <div className="relative z-10 h-full flex flex-col items-center justify-center p-8 text-center">
-        <motion.div
-          className={`w-24 h-24 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-4xl font-bold mb-6 shadow-2xl`}
-          animate={{
-            scale: isHovered ? 1.1 : 1,
-            boxShadow: isHovered
-              ? '0 0 40px rgba(255,255,255,0.3)'
-              : '0 0 20px rgba(0,0,0,0.3)',
-          }}
-        >
-          {icon}
-        </motion.div>
-
-        <h3 className="text-2xl font-bold text-white mb-2">{race}</h3>
-        <p className="text-slate-400">{tagline}</p>
-
-        <motion.div
-          className="mt-4 overflow-hidden"
-          animate={{
-            height: isHovered ? 'auto' : 0,
-            opacity: isHovered ? 1 : 0,
-          }}
-          transition={{ duration: 0.3 }}
-        >
-          <ul className="text-sm text-slate-300 space-y-1">
-            <li>Build order analysis</li>
-            <li>Timing benchmarks</li>
-            <li>Pro match comparison</li>
-          </ul>
-        </motion.div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ============================================
-// SECTION 6: PREMIUM CTA
-// ============================================
-
-function PremiumCTASection({ onRegister }: { onRegister: () => void }) {
-  return (
-    <section className="py-32 px-4 relative mesh-gradient-intense overflow-hidden">
-      {/* Floating sparkles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-white rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              scale: [0, 1, 0],
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 2 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-            }}
-          />
+            {/* Callout after feature 2 */}
+            {i === 2 && (
+              <div className="ed-feature-callout">
+                ECONOMIC <span className="accent">INTELLIGENCE</span>
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
-      <div className="max-w-4xl mx-auto text-center relative z-10">
-        {/* Main CTA Card */}
-        <motion.div
-          className="glass-strong rounded-3xl p-12 mb-12"
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h2 className="text-5xl md:text-6xl font-bold text-white mb-6">
-            Ready to Play Like a Pro?
-          </h2>
+      <div ref={pricingCalloutRef} className="ed-pricing-callout">
+        START FREE — 3 UPLOADS/MONTH
+        <div className="divider" />
+        UPGRADE ANYTIME — <span className="price">$29.99</span> ONE-TIME FOR UNLIMITED
+      </div>
 
-          <motion.button
-            onClick={onRegister}
-            className="group relative px-12 py-5 rounded-xl font-semibold text-xl overflow-hidden rainbow-border rainbow-border-glow"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span className="relative text-white flex items-center gap-3 justify-center">
-              <Sparkles className="w-6 h-6" />
-              Start Analyzing Free
-            </span>
-          </motion.button>
+      <div ref={textCardRef} className="ed-feature-text-card">
+        <div ref={textCardNumberRef} className="ed-feature-text-card-number" data-count="1200">0</div>
+        <div className="ed-feature-text-card-label">GAMES ANALYZED & COUNTING</div>
+      </div>
+    </section>
+  );
+}
 
-          <p className="text-slate-400 mt-6">No credit card required</p>
-        </motion.div>
+// ============================================
+// SECTION 3: TIMELINE
+// ============================================
+function TimelineSection() {
+  const ref = useRef<HTMLElement>(null);
 
-        {/* Scrolling Stats Ticker */}
-        <div className="overflow-hidden mb-16 py-4 border-y border-white/5">
-          <div className="flex gap-12 animate-scroll-left">
-            {[...Array(2)].map((_, setIndex) => (
-              <div key={setIndex} className="flex gap-12 shrink-0">
-                <TickerItem text="12,847 games analyzed" />
-                <TickerItem text="94% find actionable insights" />
-                <TickerItem text="<3s average analysis time" />
-                <TickerItem text="10,000+ pro replays" />
-                <TickerItem text="All 3 races supported" />
+  useGSAP(() => {
+    // Header chars
+    ref.current?.querySelectorAll<HTMLElement>('.ed-timeline-header-line .ed-char').forEach((char, i) => {
+      gsap.fromTo(char,
+        { opacity: 0, y: 40, rotation: 5 },
+        {
+          opacity: 1, y: 0, rotation: 0, duration: 0.6, ease: 'power3.out',
+          scrollTrigger: { trigger: '.ed-timeline-header', start: 'top 80%', toggleActions: 'play none none none' },
+          delay: i * 0.02,
+        }
+      );
+    });
+
+    // Image blocks
+    ref.current?.querySelectorAll<HTMLElement>('.ed-timeline-image-block').forEach((block, index) => {
+      gsap.fromTo(block,
+        { opacity: 0, y: 80, rotation: index === 0 ? 3 : -3 },
+        {
+          opacity: 1, y: 0, rotation: index === 0 ? 1 : -1, duration: 1.2, ease: 'power3.out',
+          scrollTrigger: { trigger: block, start: 'top 85%', toggleActions: 'play none none none' },
+          delay: index * 0.2,
+        }
+      );
+
+      // Drift parallax
+      gsap.fromTo(block, { x: index === 0 ? -20 : 20 }, {
+        x: index === 0 ? 20 : -20, ease: 'none',
+        scrollTrigger: { trigger: block, start: 'top bottom', end: 'bottom top', scrub: true },
+      });
+    });
+
+    // Feature labels chars
+    ref.current?.querySelectorAll<HTMLElement>('.ed-timeline-feature-item .ed-char').forEach((char, i) => {
+      gsap.fromTo(char, { opacity: 0 }, {
+        opacity: 1, duration: 0.4, ease: 'power2.out',
+        scrollTrigger: { trigger: '.ed-timeline-features-row', start: 'top 85%', toggleActions: 'play none none none' },
+        delay: i * 0.02,
+      });
+    });
+
+    // Bg number parallax
+    gsap.to('.ed-timeline-bg-number', {
+      y: -100, ease: 'none',
+      scrollTrigger: { trigger: ref.current, start: 'top bottom', end: 'bottom top', scrub: true },
+    });
+  }, { scope: ref });
+
+  return (
+    <section ref={ref} className="ed-timeline" id="timeline">
+      <div className="ed-timeline-bg-number">03</div>
+      <div className="ed-timeline-divider-top" />
+
+      <div className="ed-timeline-header">
+        <span className="ed-timeline-header-line"><SplitChars text="TRACK" /></span>
+        <span className="ed-timeline-header-line"><SplitChars text="EVERY" /></span>
+        <span className="ed-timeline-header-line"><SplitChars text="MOMENT" /></span>
+      </div>
+
+      <div className="ed-timeline-images">
+        <div className="ed-timeline-image-block">
+          <img src="/assets/screenshots/worker-chart-pvt.png" alt="Worker count timeline" />
+          <div className="ed-timeline-image-label">Worker Count</div>
+          <div className="ed-timeline-image-desc">Track your worker production against professional benchmarks. See exactly where you fall behind in economy.</div>
+        </div>
+        <div className="ed-timeline-image-block">
+          <img src="/assets/screenshots/army-chart-zvp.png" alt="Army value over time" />
+          <div className="ed-timeline-image-label">Army Value</div>
+          <div className="ed-timeline-image-desc">Monitor military investment timing. Understand when pros commit to army and when they prioritize economy.</div>
+        </div>
+      </div>
+
+      <div className="ed-timeline-features-row">
+        {['PRO COMPARISON', 'RANGE BANDS', 'KEY MOMENTS', 'MULTI-GAME'].map(label => (
+          <div key={label} className="ed-timeline-feature-item">
+            <SplitChars text={label} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ============================================
+// SECTION 3.5: PROCESS
+// ============================================
+const processSteps = [
+  { num: '01', title: 'UPLOAD YOUR REPLAY', desc: 'Drop any .SC2Replay file into the analyzer — free accounts get 3 uploads per month. Every matchup, every map, every game length. Your replay is parsed into 5-second snapshots — generating over 10,000 data points per game.' },
+  { num: '02', title: 'FIND PRO MATCHES', desc: 'Our ML-powered similarity engine matches your gameplay against 500K+ professional data points using 51 distinct features. Rule-based and embedding-based matching work together.' },
+  { num: '03', title: 'COMPARE & LEARN', desc: 'Side-by-side dashboards with 15+ analysis tools reveal exactly where your gameplay diverges from tournament-level play. Timelines, efficiency metrics, and strategic decision analysis.' },
+];
+
+function ProcessSection() {
+  const ref = useRef<HTMLElement>(null);
+
+  useGSAP(() => {
+    ref.current?.querySelectorAll<HTMLElement>('.ed-process-header-line .ed-char').forEach((char, i) => {
+      gsap.to(char, {
+        opacity: 1, y: 0, duration: 0.6, ease: 'power3.out',
+        scrollTrigger: { trigger: '.ed-process-header', start: 'top 80%', toggleActions: 'play none none none' },
+        delay: i * 0.03,
+      });
+    });
+
+    ref.current?.querySelectorAll<HTMLElement>('.ed-process-step').forEach((step, index) => {
+      gsap.to(step, {
+        opacity: 1, x: 0, duration: 1, ease: 'power3.out',
+        scrollTrigger: { trigger: step, start: 'top 85%', toggleActions: 'play none none none' },
+        delay: index * 0.2,
+      });
+    });
+  }, { scope: ref });
+
+  return (
+    <section ref={ref} className="ed-process" id="process">
+      <div className="ed-process-header">
+        <span className="ed-process-header-line"><SplitChars text="THE" /></span>
+        <span className="ed-process-header-line ed-process-header-outlined"><SplitChars text="PROCESS" /></span>
+      </div>
+
+      <div className="ed-process-steps">
+        {processSteps.map((step, i) => (
+          <div key={step.num} className="ed-process-step">
+            <div className="ed-process-step-number">{step.num}</div>
+            <div className="ed-process-step-content">
+              <h3 className="ed-process-step-title">{step.title}</h3>
+              <p className="ed-process-step-desc">{step.desc}</p>
+            </div>
+            {i < processSteps.length - 1 && <div className="ed-process-step-line" />}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ============================================
+// SECTION 4: STRATEGIC DECISIONS
+// ============================================
+const decisionQuotes = [
+  { text: 'You took your third base 45 seconds later than the pro average for this matchup.', detail: 'Base timing analysis identifies macro timing gaps' },
+  { text: 'Your army peaked at 8:30 but the engagement happened at 9:15 with 15% less value.', detail: 'Army composition tracking pinpoints costly delays' },
+  { text: 'Pro players in this position maintain 20% higher worker count through the midgame.', detail: 'Economic benchmarks reveal hidden inefficiencies' },
+];
+
+function DecisionsSection() {
+  const ref = useRef<HTMLElement>(null);
+
+  useGSAP(() => {
+    gsap.to('.ed-decisions-title-small', {
+      opacity: 1, duration: 1, ease: 'power3.out',
+      scrollTrigger: { trigger: ref.current, start: 'top 70%', toggleActions: 'play none none none' },
+    });
+    gsap.to('.ed-decisions-title-big', {
+      opacity: 1, duration: 1, ease: 'power3.out',
+      scrollTrigger: { trigger: ref.current, start: 'top 70%', toggleActions: 'play none none none' },
+      delay: 0.2,
+    });
+
+    ref.current?.querySelectorAll<HTMLElement>('.ed-decision-quote').forEach((quote, index) => {
+      gsap.to(quote, {
+        opacity: 1, x: 0, duration: 0.8, ease: 'power3.out',
+        scrollTrigger: { trigger: quote, start: 'top 85%', toggleActions: 'play none none none' },
+        delay: index * 0.15,
+      });
+    });
+
+    gsap.fromTo('.ed-decisions-image',
+      { opacity: 0, scale: 0.9, rotation: -4 },
+      {
+        opacity: 1, scale: 1, rotation: 0, duration: 1.2, ease: 'power3.out',
+        scrollTrigger: { trigger: '.ed-decisions-image', start: 'top 80%', toggleActions: 'play none none none' },
+      }
+    );
+
+    gsap.fromTo('.ed-decisions-image img', { y: 40 }, {
+      y: -40, ease: 'none',
+      scrollTrigger: { trigger: '.ed-decisions-image', start: 'top bottom', end: 'bottom top', scrub: true },
+    });
+  }, { scope: ref });
+
+  return (
+    <section ref={ref} className="ed-decisions" id="decisions">
+      <div className="ed-decisions-bg-pattern" />
+      <div className="ed-decisions-inner">
+        <div className="ed-decisions-text">
+          <div className="ed-decisions-title-small">UNDERSTAND YOUR</div>
+          <div className="ed-decisions-title-big">DECISIONS</div>
+
+          <div style={{ marginTop: '4rem' }}>
+            {decisionQuotes.map((q, i) => (
+              <div key={i} className="ed-decision-quote">
+                <span className="ed-decision-quote-mark">&ldquo;</span>
+                <div className="ed-decision-quote-text">{q.text}</div>
+                <div className="ed-decision-quote-detail">{q.detail}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Floating Testimonials */}
-        <div className="flex flex-wrap justify-center gap-6">
-          <TestimonialCard
-            quote="Finally understand why I lose"
-            rank="Bronze"
-            delay={0}
-          />
-          <TestimonialCard
-            quote="This helped me hit Diamond"
-            rank="Gold"
-            delay={0.2}
-          />
-          <TestimonialCard
-            quote="Tournament-level analysis"
-            rank="Masters"
-            delay={0.4}
-          />
+        <div className="ed-decisions-image">
+          <img src="/assets/screenshots/strategic-decisions-zvp.png" alt="Strategic decision analysis" />
         </div>
       </div>
     </section>
   );
 }
 
-function TickerItem({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-3 text-slate-400 whitespace-nowrap">
-      <BarChart3 className="w-4 h-4 text-sc2-blue" />
-      <span>{text}</span>
-    </div>
-  );
-}
+// ============================================
+// SECTION 5: HORIZONTAL SCROLL SHOWCASE
+// ============================================
+const showcasePanels = [
+  { image: '/assets/screenshots/milestones-timeline-zvp.png', alt: 'Milestone timeline' },
+  { image: '/assets/screenshots/efficiency-comparison-zvp.png', alt: 'Efficiency comparison' },
+  { image: '/assets/screenshots/supply-block-zvp.png', alt: 'Supply block analysis' },
+  { image: '/assets/screenshots/win-probability-tvp.png', alt: 'Win probability' },
+  { image: '/assets/screenshots/summary-stats-zvp.png', alt: 'Summary statistics' },
+];
 
-function TestimonialCard({ quote, rank, delay }: { quote: string; rank: string; delay: number }) {
+function ShowcaseSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const pinWrapRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (!containerRef.current || !pinWrapRef.current) return;
+
+    const container = containerRef.current;
+
+    // Title entrance
+    gsap.fromTo('.ed-showcase-title', { opacity: 0, y: 20 }, {
+      opacity: 1, y: 0, duration: 1, ease: 'power3.out',
+      scrollTrigger: { trigger: sectionRef.current, start: 'top 80%', toggleActions: 'play none none none' },
+    });
+
+    // Horizontal scroll
+    const horizontalScroll = gsap.to(container, {
+      x: () => -(container.scrollWidth - window.innerWidth),
+      ease: 'none',
+      scrollTrigger: {
+        trigger: pinWrapRef.current,
+        pin: true,
+        scrub: 1,
+        end: () => '+=' + (container.scrollWidth - window.innerWidth),
+        invalidateOnRefresh: true,
+        onUpdate: (self) => {
+          if (progressBarRef.current) {
+            gsap.set(progressBarRef.current, { width: (self.progress * 100) + '%' });
+          }
+        },
+      },
+    });
+
+    // Per-panel animations
+    container.querySelectorAll<HTMLElement>('.ed-showcase-panel').forEach(panel => {
+      const img = panel.querySelector('img');
+      if (img) {
+        gsap.fromTo(img, { scale: 1.1 }, {
+          scale: 1, ease: 'none',
+          scrollTrigger: {
+            trigger: panel, containerAnimation: horizontalScroll,
+            start: 'left right', end: 'left left', scrub: true,
+          },
+        });
+      }
+
+      panel.querySelectorAll('.ed-panel-overlay-text, .ed-panel-2-text, .ed-panel-4-side, .ed-panel-caption').forEach(textEl => {
+        gsap.fromTo(textEl, { x: 60, opacity: 0 }, {
+          x: 0, opacity: 1, ease: 'power2.out',
+          scrollTrigger: {
+            trigger: panel, containerAnimation: horizontalScroll,
+            start: 'left 80%', end: 'left 40%', scrub: true,
+          },
+        });
+      });
+    });
+  }, { scope: sectionRef });
+
   return (
-    <motion.div
-      className="glass-card rounded-xl p-6 max-w-xs animate-bob"
-      style={{ animationDelay: `${delay}s` }}
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay }}
-    >
-      <p className="text-white mb-3">"{quote}"</p>
-      <p className="text-sm text-slate-400">- {rank} League Player</p>
-    </motion.div>
+    <section ref={sectionRef} className="ed-showcase" id="showcase">
+      <div className="ed-showcase-title-bar">
+        <h2 className="ed-showcase-title">DEEP <span className="accent">PERFORMANCE</span> INSIGHTS</h2>
+      </div>
+
+      <div className="ed-showcase-progress-wrap">
+        <div className="ed-showcase-progress">
+          <div ref={progressBarRef} className="ed-showcase-progress-bar" />
+        </div>
+      </div>
+
+      <div ref={pinWrapRef} className="ed-showcase-pin-wrap">
+        <div ref={containerRef} className="ed-showcase-container">
+          {/* Panel 1: Milestones */}
+          <div className="ed-showcase-panel ed-panel-1">
+            <span className="ed-panel-number">01</span>
+            <img src={showcasePanels[0].image} alt={showcasePanels[0].alt} />
+            <div className="ed-panel-overlay-text" style={{ bottom: '10%', left: '5%' }}>MILESTONE<br />TRACKING</div>
+            <div className="ed-showcase-panel-count">01 / 05</div>
+            <div className="ed-showcase-panel-divider" />
+          </div>
+
+          {/* Panel 2: Efficiency */}
+          <div className="ed-showcase-panel ed-panel-2">
+            <div className="ed-panel-2-text">
+              <h2>EFFI<br />CIENCY</h2>
+              <p>Measure how effectively you convert resources into results. Compare your efficiency ratios against the top players in every matchup.</p>
+            </div>
+            <div className="ed-panel-2-image">
+              <img src={showcasePanels[1].image} alt={showcasePanels[1].alt} />
+            </div>
+            <div className="ed-showcase-panel-count">02 / 05</div>
+            <div className="ed-showcase-panel-divider" />
+          </div>
+
+          {/* Panel 3: Supply Block */}
+          <div className="ed-showcase-panel ed-panel-3">
+            <span className="ed-panel-bg-number">03</span>
+            <img src={showcasePanels[2].image} alt={showcasePanels[2].alt} />
+            <div className="ed-panel-caption">SUPPLY BLOCK ANALYSIS</div>
+            <div className="ed-showcase-panel-count">03 / 05</div>
+            <div className="ed-showcase-panel-divider" />
+          </div>
+
+          {/* Panel 4: Win Probability */}
+          <div className="ed-showcase-panel ed-panel-4">
+            <div className="ed-panel-4-content">
+              <img src={showcasePanels[3].image} alt={showcasePanels[3].alt} />
+              <div className="ed-panel-4-side">
+                <h3>WIN<br /><span>PROBABILITY</span></h3>
+                <p>Real-time win probability calculated from game state snapshots. See when the game was truly decided.</p>
+              </div>
+            </div>
+            <div className="ed-showcase-panel-count">04 / 05</div>
+            <div className="ed-showcase-panel-divider" />
+          </div>
+
+          {/* Panel 5: Summary */}
+          <div className="ed-showcase-panel ed-panel-5">
+            <div className="ed-panel-overlay-text" style={{ top: '12%', left: '8%' }}>
+              <span>THE COMPLETE</span><br />
+              <span className="blue">PICTURE</span>
+            </div>
+            <img src={showcasePanels[4].image} alt={showcasePanels[4].alt} />
+            <div className="ed-showcase-panel-count">05 / 05</div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
 // ============================================
-// MAIN LANDING PAGE COMPONENT
+// SECTION 5.5: STATS RIBBON
 // ============================================
+const ribbonStats = [
+  { count: 5, label: 'SECOND SNAPSHOT\nINTERVALS' },
+  { count: 26, label: 'ECONOMIC\nINDICATORS' },
+  { count: 15, label: 'VISUALIZATION\nTOOLS' },
+  { count: 99, label: 'PARSE\nACCURACY %' },
+  { count: 850, label: 'TOURNAMENT\nREPLAYS' },
+];
 
+function StatsRibbon() {
+  const ref = useRef<HTMLElement>(null);
+
+  useGSAP(() => {
+    ref.current?.querySelectorAll<HTMLElement>('.ed-stats-ribbon-item').forEach((item, index) => {
+      gsap.to(item, {
+        opacity: 1, y: 0, duration: 0.8, ease: 'power3.out',
+        scrollTrigger: { trigger: item, start: 'top 85%', toggleActions: 'play none none none' },
+        delay: index * 0.1,
+      });
+
+      const numEl = item.querySelector<HTMLElement>('.ed-stats-ribbon-number');
+      if (numEl?.dataset.count) {
+        const target = parseInt(numEl.dataset.count);
+        ScrollTrigger.create({
+          trigger: numEl,
+          start: 'top 85%',
+          once: true,
+          onEnter: () => {
+            gsap.to(numEl, {
+              innerText: target,
+              duration: 2,
+              ease: 'power2.out',
+              snap: { innerText: 1 },
+              onUpdate() { numEl.innerText = formatStat(Math.round(parseFloat(numEl.innerText))); },
+            });
+          },
+        });
+      }
+    });
+  }, { scope: ref });
+
+  return (
+    <section ref={ref} className="ed-stats-ribbon" id="statsRibbon">
+      <div className="ed-stats-ribbon-inner">
+        {ribbonStats.map((stat, i) => (
+          <div key={stat.label}>
+            {i > 0 && <div className="ed-stats-ribbon-divider" />}
+            <div className="ed-stats-ribbon-item">
+              <div className="ed-stats-ribbon-number" data-count={stat.count}>0</div>
+              <div className="ed-stats-ribbon-label" dangerouslySetInnerHTML={{ __html: stat.label.replace('\n', '<br/>') }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ============================================
+// SECTION 6: RACE SHOWCASE
+// ============================================
+const races = [
+  { cls: 'terran', letter: 'T', name: 'TERRAN', tagline: '"Adapt. Overcome. Dominate."', bullets: ['Marine/Medivac timing analysis', 'Mech vs. Bio transition tracking', 'Orbital Command energy usage'] },
+  { cls: 'zerg', letter: 'Z', name: 'ZERG', tagline: '"Evolve. Consume. Multiply."', bullets: ['Inject cycle efficiency metrics', 'Creep spread coverage tracking', 'Larva spending optimization'] },
+  { cls: 'protoss', letter: 'P', name: 'PROTOSS', tagline: '"Power. Precision. Perfection."', bullets: ['Warp gate cooldown utilization', 'Chronoboost efficiency analysis', 'Gateway vs. Robo tech paths'] },
+];
+
+function RaceSection() {
+  const ref = useRef<HTMLElement>(null);
+
+  useGSAP(() => {
+    ref.current?.querySelectorAll<HTMLElement>('.ed-race-column').forEach((col, index) => {
+      gsap.to(col, {
+        opacity: 1, y: 0, duration: 1, ease: 'power3.out',
+        scrollTrigger: { trigger: col, start: 'top 85%', toggleActions: 'play none none none' },
+        delay: index * 0.15,
+      });
+    });
+  }, { scope: ref });
+
+  // Hover dimming effect (JS for cross-browser support)
+  const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const cols = ref.current?.querySelectorAll<HTMLElement>('.ed-race-column');
+    cols?.forEach(other => {
+      if (other !== e.currentTarget) gsap.to(other, { opacity: 0.4, duration: 0.4, ease: 'power2.out' });
+    });
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    const cols = ref.current?.querySelectorAll<HTMLElement>('.ed-race-column');
+    cols?.forEach(other => gsap.to(other, { opacity: 1, duration: 0.4, ease: 'power2.out' }));
+  }, []);
+
+  return (
+    <section ref={ref} className="ed-races" id="races">
+      <div className="ed-race-divider-top" />
+      {races.map(race => (
+        <div
+          key={race.cls}
+          className={`ed-race-column ${race.cls}`}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <span className="ed-race-letter">{race.letter}</span>
+          <div className="ed-race-content">
+            <div className="ed-race-name">{race.name}</div>
+            <div className="ed-race-tagline">{race.tagline}</div>
+            <div className="ed-race-icon-line" />
+            <ul className="ed-race-bullets">
+              {race.bullets.map(b => <li key={b}>{b}</li>)}
+            </ul>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+// ============================================
+// SECTION 7: CTA
+// ============================================
+const marqueeItems = [
+  { text: 'INSTANT', cls: 'blue', suffix: ' INSIGHTS' },
+  { text: 'EVERY', cls: 'blue', suffix: ' MATCHUP COVERED' },
+  { text: '23', cls: 'highlight', suffix: ' TRACKED METRICS' },
+  { text: 'TOURNAMENT', cls: 'highlight', suffix: ' PRO REPLAYS' },
+  { text: 'REAL-TIME ', cls: '', prefix: true, suffix: 'WIN PROBABILITY', suffixCls: 'blue' },
+  { text: 'BUILD ORDER', cls: 'highlight', suffix: ' ANALYSIS' },
+  { text: 'ML-POWERED', cls: 'blue', suffix: ' MATCHING' },
+  { text: 'PROFESSIONAL', cls: 'highlight', suffix: ' BENCHMARKS' },
+];
+
+const capabilities = [
+  { text: 'Every replay is parsed into 5-second snapshots tracking 23 distinct metrics — workers, army value, resources, bases, upgrades, and more. Zero estimation, pure data.', label: 'PRECISION PARSING' },
+  { text: 'ML-powered similarity engine analyzes 51 features across your gameplay to find the closest professional matches. Dual-mode matching combines rules and embeddings for accuracy.', label: 'INTELLIGENT MATCHING' },
+  { text: 'Win probability curves, efficiency comparisons, combat trade analysis, supply block tracking, spending patterns — a complete analytical toolkit that turns data into actionable insights.', label: 'COMPREHENSIVE TOOLS' },
+];
+
+function CTASection({ onRegister }: { onRegister: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const marqueeRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    // CTA title chars — random position assembly
+    ref.current?.querySelectorAll<HTMLElement>('.ed-cta-title-line .ed-char').forEach((char, i) => {
+      const rx = (Math.random() - 0.5) * 100;
+      const ry = (Math.random() - 0.5) * 60;
+      const rr = (Math.random() - 0.5) * 30;
+      gsap.fromTo(char,
+        { opacity: 0, x: rx, y: ry, rotation: rr },
+        {
+          opacity: 1, x: 0, y: 0, rotation: 0, duration: 0.8, ease: 'power3.out',
+          scrollTrigger: { trigger: '.ed-cta-title-wrap', start: 'top 80%', toggleActions: 'play none none none' },
+          delay: i * 0.02,
+        }
+      );
+    });
+
+    // CTA features
+    ref.current?.querySelectorAll<HTMLElement>('.ed-cta-feature').forEach((feat, index) => {
+      gsap.fromTo(feat, { opacity: 0, y: 30 }, {
+        opacity: 1, y: 0, duration: 0.8, ease: 'power3.out',
+        scrollTrigger: { trigger: feat, start: 'top 90%', toggleActions: 'play none none none' },
+        delay: index * 0.1,
+      });
+    });
+
+    // Capabilities
+    ref.current?.querySelectorAll<HTMLElement>('.ed-capability').forEach((t, index) => {
+      gsap.fromTo(t, { opacity: 0, y: 40 }, {
+        opacity: 1, y: 0, duration: 1, ease: 'power3.out',
+        scrollTrigger: { trigger: t, start: 'top 90%', toggleActions: 'play none none none' },
+        delay: index * 0.15,
+      });
+    });
+
+    // BG text parallax
+    gsap.to('.ed-cta-bg-text', {
+      y: -100, ease: 'none',
+      scrollTrigger: { trigger: ref.current, start: 'top bottom', end: 'bottom top', scrub: true },
+    });
+  }, { scope: ref });
+
+  // Marquee speed on fast scroll
+  useEffect(() => {
+    const handler = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > 50 && marqueeRef.current) {
+        marqueeRef.current.style.animationDuration = '15s';
+        const timer = setTimeout(() => {
+          if (marqueeRef.current) marqueeRef.current.style.animationDuration = '30s';
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    };
+    document.addEventListener('wheel', handler);
+    return () => document.removeEventListener('wheel', handler);
+  }, []);
+
+  // Magnetic button effect
+  const handleMagnetic = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    gsap.to(e.currentTarget, { x: x * 0.2, y: y * 0.2, duration: 0.4, ease: 'power3.out' });
+  }, []);
+
+  const handleMagneticLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    gsap.to(e.currentTarget, { x: 0, y: 0, duration: 0.6, ease: 'elastic.out(1, 0.5)' });
+  }, []);
+
+  const renderMarqueeSet = () => (
+    <>
+      {marqueeItems.map((item, i) => (
+        <span key={i} className="ed-marquee-item">
+          {item.prefix ? (
+            <>REAL-TIME <span className="blue">WIN PROBABILITY</span></>
+          ) : (
+            <><span className={item.cls}>{item.text}</span>{item.suffix}</>
+          )}
+        </span>
+      ))}
+    </>
+  );
+
+  return (
+    <section ref={ref} className="ed-cta" id="cta">
+      <div className="ed-cta-bg-text">GG</div>
+
+      <div className="ed-cta-title-wrap">
+        <span className="ed-cta-title-line"><SplitChars text="READY TO" /></span>
+        <span className="ed-cta-title-line"><SplitChars text="PLAY LIKE A PRO?" /></span>
+      </div>
+
+      <div className="ed-cta-features-grid">
+        {[
+          { icon: '↑', label: 'UPLOAD', desc: 'Drop your .SC2Replay file' },
+          { icon: '↔', label: 'COMPARE', desc: 'Match against 500K+ pro data points' },
+          { icon: '✓', label: 'IMPROVE', desc: 'Get actionable insights' },
+        ].map(f => (
+          <div key={f.label} className="ed-cta-feature">
+            <div className="ed-cta-feature-icon">{f.icon}</div>
+            <div className="ed-cta-feature-label">{f.label}</div>
+            <div className="ed-cta-feature-desc">{f.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ed-cta-button-wrap">
+        <button
+          className="ed-cta-button"
+          onClick={onRegister}
+          onMouseMove={handleMagnetic}
+          onMouseLeave={handleMagneticLeave}
+        >
+          START ANALYZING FREE →
+        </button>
+        <div className="ed-cta-subtext" style={{ textAlign: 'center' }}>
+          No information required • 3 uploads/month
+        </div>
+      </div>
+
+      <div className="ed-marquee-wrap">
+        <div ref={marqueeRef} className="ed-marquee-track">
+          {renderMarqueeSet()}
+          {renderMarqueeSet()}
+        </div>
+      </div>
+
+      <div className="ed-testimonials">
+        {capabilities.map(c => (
+          <div key={c.label} className="ed-capability">
+            <div className="ed-capability-label">{c.label}</div>
+            <p className="ed-capability-text">{c.text}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="ed-footer-top">
+        <div className="ed-footer-logo">SC2<span>ANALYZER</span></div>
+        <div className="ed-footer-social">
+          <a href="#">Discord</a>
+          <a href="#">Twitter</a>
+          <a href="#">Reddit</a>
+          <a href="#">GitHub</a>
+        </div>
+      </div>
+
+      <footer className="ed-footer">
+        <p>SC2 Replay Analyzer — Built for competitive StarCraft II players.</p>
+      </footer>
+    </section>
+  );
+}
+
+// ============================================
+// MAIN LANDING PAGE
+// ============================================
 export default function LandingPage({ onLogin, onRegister }: LandingPageProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef });
-  const backgroundY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const scrollProgressRef = useRef<HTMLDivElement>(null);
+
+  // Initialize Lenis smooth scroll
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+    });
+
+    lenis.on('scroll', ScrollTrigger.update);
+
+    gsap.ticker.add((time) => {
+      lenis.raf(time * 1000);
+    });
+    gsap.ticker.lagSmoothing(0);
+
+    return () => {
+      lenis.destroy();
+      gsap.ticker.remove(lenis.raf);
+      ScrollTrigger.getAll().forEach(st => st.kill());
+    };
+  }, []);
+
+  // Scroll progress line
+  useGSAP(() => {
+    if (!scrollProgressRef.current) return;
+    gsap.to(scrollProgressRef.current, {
+      scaleX: 1, ease: 'none',
+      scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: true },
+    });
+  });
+
+  // Keyboard accessibility
+  useEffect(() => {
+    const keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') document.body.classList.add('user-is-tabbing');
+    };
+    const mouseHandler = () => document.body.classList.remove('user-is-tabbing');
+    document.addEventListener('keydown', keyHandler);
+    document.addEventListener('mousedown', mouseHandler);
+    return () => {
+      document.removeEventListener('keydown', keyHandler);
+      document.removeEventListener('mousedown', mouseHandler);
+    };
+  }, []);
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#0a0e17] overflow-x-hidden">
-      {/* Animated background that moves with scroll */}
-      <motion.div
-        className="fixed inset-0 pointer-events-none"
-        style={{ y: backgroundY }}
-      >
-        <div className="absolute top-0 left-1/4 w-[1000px] h-[1000px] bg-sc2-blue/5 rounded-full blur-[200px]" />
-        <div className="absolute bottom-0 right-1/4 w-[800px] h-[800px] bg-sc2-purple/5 rounded-full blur-[200px]" />
-      </motion.div>
+    <div ref={containerRef} className="ed-landing" style={{ background: 'var(--ed-black)' }}>
+      {/* Noise overlay */}
+      <div className="ed-noise-overlay" />
 
-      <HeroSection onLogin={onLogin} onRegister={onRegister} />
-      <BentoGridSection />
-      <TimelineChartsSection />
-      <DecisionAnalysisSection />
-      <RaceShowcaseSection />
-      <PremiumCTASection onRegister={onRegister} />
+      {/* Scroll progress */}
+      <div ref={scrollProgressRef} className="ed-scroll-progress" />
 
-      {/* Footer */}
-      <footer className="py-8 border-t border-white/5 relative z-10">
-        <div className="max-w-6xl mx-auto px-4 text-center text-slate-500">
-          <p>SC2 Replay Analyzer - Compare your play to the pros</p>
+      {/* Nav */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, width: '100%', zIndex: 1000,
+        padding: '1.5rem clamp(1.5rem, 4vw, 5rem)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        mixBlendMode: 'difference',
+      }}>
+        <div className="ed-footer-logo" style={{ fontSize: '1.5rem' }}>SC2<span>ANALYZER</span></div>
+        <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'center' }}>
+          <button
+            onClick={onLogin}
+            style={{
+              fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 500,
+              letterSpacing: '0.1em', textTransform: 'uppercase' as const,
+              color: 'var(--ed-white)', background: 'none', border: 'none', cursor: 'pointer',
+            }}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={onRegister}
+            style={{
+              fontFamily: 'var(--font-display)', fontSize: '1rem',
+              letterSpacing: '0.05em', color: 'var(--ed-white)',
+              padding: '0.5rem 1.5rem', border: '1px solid var(--ed-white)',
+              background: 'transparent', cursor: 'pointer',
+              transition: 'background 0.3s ease, color 0.3s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--ed-white)'; e.currentTarget.style.color = 'var(--ed-black)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--ed-white)'; }}
+          >
+            Start Free
+          </button>
         </div>
-      </footer>
+      </nav>
+
+      <HeroSection onRegister={onRegister} />
+      <EditorialDivider text="Feature Analysis" />
+      <FeaturesSection />
+      <EditorialDivider text="Timeline Deep Dive" />
+      <TimelineSection />
+      <ProcessSection />
+      <EditorialDivider text="Strategic Insights" />
+      <DecisionsSection />
+      <ShowcaseSection />
+      <EditorialDivider text="Race Analysis" />
+      <StatsRibbon />
+      <RaceSection />
+      <CTASection onRegister={onRegister} />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import json
 from typing import Dict, Any, Set, Optional
 from collections import defaultdict
 
-from backend.src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS
+from backend.src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS, MORPH_SOURCES
 
 
 # Units to ignore (not real combat units)
@@ -184,6 +184,32 @@ class GameState:
             if unit_id:
                 self.alive_units[unit_id] = unit
 
+            # Handle morph: decrement source unit that was consumed
+            if unit_type in MORPH_SOURCES:
+                source_type, count_consumed = MORPH_SOURCES[unit_type]
+                # Decrement source units (they were consumed in the morph)
+                for _ in range(count_consumed):
+                    if self.units[source_type] > 0:
+                        self.units[source_type] -= 1
+                    elif source_type == 'HighTemplar' and self.units.get('DarkTemplar', 0) > 0:
+                        # Archon can consume DarkTemplar too
+                        self.units['DarkTemplar'] -= 1
+
+                # Track only the morph cost (source cost was already tracked when source was born)
+                if unit_type in UNIT_COSTS and source_type in UNIT_COSTS:
+                    target_cost = UNIT_COSTS[unit_type]
+                    source_cost = UNIT_COSTS[source_type]
+                    morph_minerals = target_cost['minerals'] - source_cost['minerals'] * count_consumed
+                    morph_gas = target_cost['gas'] - source_cost['gas'] * count_consumed
+                    self.resources_spent_minerals += max(0, morph_minerals)
+                    self.resources_spent_gas += max(0, morph_gas)
+            else:
+                # Track spending for non-morph units born directly
+                if unit_type in UNIT_COSTS:
+                    cost = UNIT_COSTS[unit_type]
+                    self.resources_spent_minerals += cost['minerals']
+                    self.resources_spent_gas += cost['gas']
+
     def _handle_unit_done(self, event):
         """Handle unit/building completion"""
         if not hasattr(event, 'unit') or event.unit is None:
@@ -213,8 +239,8 @@ class GameState:
                 if unit_type not in self.buildings or self.buildings[unit_type] == 0:
                     self.buildings[unit_type] += 1
 
-        # Calculate resource cost for spending tracking
-        if unit_type in UNIT_COSTS:
+        # Track spending for buildings only (non-building spending is tracked in _handle_unit_born)
+        if hasattr(unit, 'is_building') and unit.is_building and unit_type in UNIT_COSTS:
             cost = UNIT_COSTS[unit_type]
             self.resources_spent_minerals += cost['minerals']
             self.resources_spent_gas += cost['gas']
@@ -436,13 +462,13 @@ class GameState:
         return total
 
     def _calculate_army_supply(self) -> int:
-        """Calculate total army supply"""
+        """Calculate total army supply (uses round to avoid truncating fractional supply like Zergling 0.5)"""
         total = 0
         for unit_type, count in self.units.items():
             if unit_type not in WORKER_UNITS and unit_type in UNIT_COSTS:
                 supply = UNIT_COSTS[unit_type]['supply']
                 total += supply * count
-        return int(total)
+        return round(total)
 
     def _count_bases(self) -> int:
         """Count base buildings (town halls)"""

@@ -12,30 +12,33 @@ export function useGames(filters?: { is_pro?: boolean; map_name?: string; race?:
   });
 }
 
-// Get single game
+// Get single game (replay data is immutable once parsed)
 export function useGame(gameId: number | null) {
   return useQuery({
     queryKey: ['game', gameId],
     queryFn: () => apiClient.getGame(gameId!),
     enabled: gameId !== null,
+    staleTime: Infinity,
   });
 }
 
-// Get snapshots
+// Get snapshots (replay snapshots never change)
 export function useSnapshots(gameId: number | null, playerNumber?: 1 | 2) {
   return useQuery({
     queryKey: ['snapshots', gameId, playerNumber],
     queryFn: () => apiClient.getSnapshots(gameId!, playerNumber),
     enabled: gameId !== null,
+    staleTime: Infinity,
   });
 }
 
-// Get similar games
+// Get similar games (deterministic for same inputs)
 export function useSimilarGames(gameId: number | null, limit: number = 3) {
   return useQuery({
     queryKey: ['similar', gameId, limit],
     queryFn: () => apiClient.getSimilarGames(gameId!, limit),
     enabled: gameId !== null,
+    staleTime: Infinity,
   });
 }
 

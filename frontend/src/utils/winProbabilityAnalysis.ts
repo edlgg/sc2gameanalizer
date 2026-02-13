@@ -207,18 +207,23 @@ export function analyzeWinProbability(
 function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
   if (snapshots.length === 0) return null;
 
-  let closest = snapshots[0];
-  let minDiff = Math.abs(snapshots[0].game_time_seconds - targetTime);
-
-  for (const snap of snapshots) {
-    const diff = Math.abs(snap.game_time_seconds - targetTime);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = snap;
+  // Binary search — snapshots are sorted by game_time_seconds
+  let lo = 0;
+  let hi = snapshots.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (snapshots[mid].game_time_seconds < targetTime) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
     }
   }
-
-  return closest;
+  if (lo > 0) {
+    const prev = snapshots[lo - 1];
+    const curr = snapshots[lo];
+    return Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
+  }
+  return snapshots[lo];
 }
 
 /**

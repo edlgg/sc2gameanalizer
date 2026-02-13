@@ -7,6 +7,7 @@ __pycache__/
 venv/
 .venv/
 .env
+.env.prod
 *.egg-info/
 dist/
 build/
@@ -37,6 +38,10 @@ frontend/node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Unrelated build artifacts
+build-libbitcoin-explorer/
+install.sh
 
 data/
 .env.example

@@ -4,6 +4,7 @@ import type { ChartDataPoint } from '../../types';
 interface TimelineChartProps {
   data: ChartDataPoint[];
   title: string;
+  description?: string;
   valueKey?: string;
   valueKey2?: string;
   label1?: string;
@@ -20,6 +21,7 @@ interface TimelineChartProps {
 export default function TimelineChart({
   data,
   title,
+  description,
   valueKey = 'value',
   label1 = 'You',
   label2 = 'Pro Avg',
@@ -147,7 +149,7 @@ export default function TimelineChart({
               stroke="none"
               fill={color2}
               fillOpacity={0.15}
-              animationDuration={1500}
+              animationDuration={500}
               animationEasing="ease-in-out"
               legendType="none"
             />
@@ -159,7 +161,7 @@ export default function TimelineChart({
               stroke="none"
               fill="#1e293b"
               fillOpacity={1}
-              animationDuration={1500}
+              animationDuration={500}
               animationEasing="ease-in-out"
               legendType="none"
             />
@@ -177,7 +179,7 @@ export default function TimelineChart({
               strokeDasharray="3 3"
               strokeOpacity={0.4}
               dot={false}
-              animationDuration={1500}
+              animationDuration={500}
               animationEasing="ease-in-out"
               legendType="line"
             />
@@ -194,7 +196,7 @@ export default function TimelineChart({
                 fill={color1}
                 fillOpacity={0.3}
                 strokeWidth={3}
-                animationDuration={1500}
+                animationDuration={500}
                 animationEasing="ease-in-out"
               />
               <Area
@@ -205,7 +207,7 @@ export default function TimelineChart({
                 fill={color2}
                 fillOpacity={0.2}
                 strokeWidth={3}
-                animationDuration={1500}
+                animationDuration={500}
                 animationEasing="ease-in-out"
               />
             </>
@@ -218,7 +220,7 @@ export default function TimelineChart({
                 stroke={color1}
                 strokeWidth={3}
                 dot={false}
-                animationDuration={1500}
+                animationDuration={500}
                 animationEasing="ease-in-out"
               />
               <Line
@@ -228,7 +230,7 @@ export default function TimelineChart({
                 stroke={color2}
                 strokeWidth={3}
                 dot={false}
-                animationDuration={1500}
+                animationDuration={500}
                 animationEasing="ease-in-out"
               />
             </>

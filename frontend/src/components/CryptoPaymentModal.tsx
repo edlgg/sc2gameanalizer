@@ -19,7 +19,7 @@ interface PaymentInfo {
   address: string;
   amount: string;
   amount_raw: number;
-  amount_exact?: number;  // Float for display (e.g., 19.001)
+  amount_exact?: number;  // Float for display (e.g., 29.991)
   token: string;
   chain: string;
   chain_id: number;

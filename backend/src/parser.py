@@ -7,10 +7,10 @@ from typing import Dict, Any, List
 import sc2reader
 
 from backend.src.database import (
+    get_connection,
     insert_game,
     insert_snapshots,
     insert_build_order_events,
-    delete_game_by_replay_file,
 )
 from backend.src.snapshot import GameState
 from backend.src.build_order import extract_build_order_events
@@ -19,6 +19,8 @@ from backend.src.build_order import extract_build_order_events
 def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     """
     Delete existing game data and reparse a replay file.
+    The delete and re-insert are wrapped in a single transaction so that
+    a failure during re-parse does not lose the original data.
 
     Args:
         replay_path: Path to the SC2Replay file
@@ -27,22 +29,77 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     Raises:
         ValueError: If replay is not valid (not 1v1, too short, etc.)
     """
-    # Delete existing game data if it exists
-    conn = sqlite3.connect(db_path)
+    # Load and validate replay BEFORE touching the database
+    replay = sc2reader.load_replay(str(replay_path), load_level=4)
+
+    # Validate: must be 1v1
+    if len(replay.players) != 2:
+        raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
+
+    # Validate: must be at least 60 seconds
+    game_length_seconds = replay.game_length.total_seconds()
+    if game_length_seconds < 60:
+        raise ValueError(f"Game too short ({game_length_seconds}s < 60s)")
+
+    # Validate: must not be against AI/Computer
+    players = list(replay.players)
+    ai_patterns = ['A.I.', 'ИИ', 'Cheater', 'Computer', 'Bot', 'IA ', 'I.A.', 'KI ']
+    for player in players:
+        player_name = player.name
+        for pattern in ai_patterns:
+            if pattern in player_name:
+                raise ValueError(f"Game against AI/Computer: {player_name}")
+
+    # Extract game metadata and generate snapshots
+    game_data = extract_game_metadata(replay, replay_path)
+    snapshots = generate_snapshots(replay)
+
+    # Delete old data and insert new data in a single transaction
+    conn = get_connection(db_path)
     try:
-        deleted = delete_game_by_replay_file(conn, replay_path.name)
-        if deleted:
+        cursor = conn.cursor()
+
+        # Delete existing game data if it exists
+        cursor.execute("SELECT id FROM games WHERE replay_file = ?", (replay_path.name,))
+        result = cursor.fetchone()
+        if result:
+            game_id = result[0]
+            cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
+            cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+            try:
+                cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
+            except sqlite3.OperationalError:
+                pass  # user_uploads table may not exist in batch processing contexts
+            cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
             print(f"Deleted existing game data for {replay_path.name}")
+
+        # Insert new data (no intermediate commits)
+        game_id = insert_game(conn, game_data, commit=False)
+        insert_snapshots(conn, game_id, snapshots, commit=False)
+
+        # Extract and insert build order events for both players
+        for player_num in [1, 2]:
+            player_snapshots = [s for s in snapshots if s['player_number'] == player_num]
+            if player_snapshots:
+                race = player_snapshots[0]['race']
+                events = extract_build_order_events(player_snapshots, race)
+                if events:
+                    insert_build_order_events(conn, game_id, player_num, events, commit=False)
+
+        # Commit entire transaction at once
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
-
-    # Parse the replay file
-    parse_replay_file(replay_path, db_path)
 
 
 def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     """
     Parse a replay file and store snapshots in the database.
+    All inserts are wrapped in a single transaction — on failure,
+    everything is rolled back so no partial data is left behind.
 
     Args:
         replay_path: Path to the SC2Replay file
@@ -78,11 +135,11 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     # Generate snapshots every 5 seconds for both players
     snapshots = generate_snapshots(replay)
 
-    # Write to database
-    conn = sqlite3.connect(db_path)
+    # Write to database in a single transaction
+    conn = get_connection(db_path)
     try:
-        game_id = insert_game(conn, game_data)
-        insert_snapshots(conn, game_id, snapshots)
+        game_id = insert_game(conn, game_data, commit=False)
+        insert_snapshots(conn, game_id, snapshots, commit=False)
 
         # Extract and insert build order events for both players
         for player_num in [1, 2]:
@@ -98,7 +155,13 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
 
                 # Insert into database
                 if events:
-                    insert_build_order_events(conn, game_id, player_num, events)
+                    insert_build_order_events(conn, game_id, player_num, events, commit=False)
+
+        # Commit entire transaction at once
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -123,16 +186,16 @@ def extract_game_metadata(replay, replay_path: Path) -> Dict[str, Any]:
             result = idx
             break
 
-    # If no winner found, check if someone left/lost
+    # If no winner found, check if someone lost (the OTHER player wins)
     if result is None:
         for idx, player in enumerate(players, 1):
-            if hasattr(player, 'result') and player.result != 'Loss':
-                result = idx
+            if hasattr(player, 'result') and player.result == 'Loss':
+                # The other player won
+                result = 2 if idx == 1 else 1
                 break
 
-    # Fallback to player 1 if still unclear
-    if result is None:
-        result = 1
+    # If still unclear, leave as None rather than biasing toward player 1
+    # The DB schema allows NULL for result
 
     # Determine if this is a pro replay
     # Pro replays are downloaded from spawningtool.com and have names like "replay_12345.SC2Replay"
@@ -176,25 +239,12 @@ def generate_snapshots(replay) -> List[Dict[str, Any]]:
         for idx, player in enumerate(players, 1)
     }
 
-    # Process all events chronologically
-    for event in replay.events:
-        for player, state in game_states.items():
-            state.process_event(event)
-
     # Generate snapshots every 5 seconds
     snapshots = []
     game_length_seconds = int(replay.game_length.total_seconds())
 
-    # We need to re-process events and capture state at each 5-second mark
-    # Reset states
-    game_states = {
-        player: GameState(player, idx)
-        for idx, player in enumerate(players, 1)
-    }
-
     snapshot_times = list(range(0, game_length_seconds + 1, 5))
     snapshot_idx = 0
-    current_snapshot_time = snapshot_times[snapshot_idx] if snapshot_times else 0
 
     for event in replay.events:
         # Convert event time to seconds

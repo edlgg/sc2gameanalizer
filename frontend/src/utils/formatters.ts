@@ -117,9 +117,12 @@ export function calculateDelta(
     const userValue = userMap.get(time);
     const proValue = proMap.get(time);
 
-    if (userValue !== undefined && proValue !== undefined && proValue !== 0) {
+    if (userValue !== undefined && proValue !== undefined) {
       const difference = userValue - proValue;
-      const percentageDifference = ((userValue - proValue) / proValue) * 100;
+      // Only calculate percentage when pro > 0 to avoid Infinity
+      const percentageDifference = proValue !== 0
+        ? ((userValue - proValue) / proValue) * 100
+        : 0;
 
       deltaPoints.push({
         time,
@@ -141,7 +144,15 @@ export function extractKeyMoments(
   proSnapshots: Snapshot[]
 ): KeyMoment[] {
   const moments: KeyMoment[] = [];
-  const keyTimes = [180, 360, 540, 720]; // 3min, 6min, 9min, 12min
+  // Generate timestamps every 3 min up to game end (dynamic, not hardcoded to 12min)
+  const maxTime = Math.max(
+    ...userSnapshots.map(s => s.game_time_seconds),
+    ...proSnapshots.map(s => s.game_time_seconds)
+  );
+  const keyTimes: number[] = [];
+  for (let t = 180; t <= maxTime; t += 180) {
+    keyTimes.push(t);
+  }
 
   keyTimes.forEach((targetTime) => {
     const userSnap = findClosestSnapshot(userSnapshots, targetTime);
@@ -219,11 +230,24 @@ export function extractKeyMoments(
 function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
   if (snapshots.length === 0) return null;
 
-  return snapshots.reduce((prev, curr) => {
-    const prevDiff = Math.abs(prev.game_time_seconds - targetTime);
-    const currDiff = Math.abs(curr.game_time_seconds - targetTime);
-    return currDiff < prevDiff ? curr : prev;
-  });
+  // Binary search — snapshots are sorted by game_time_seconds
+  let lo = 0;
+  let hi = snapshots.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (snapshots[mid].game_time_seconds < targetTime) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  // lo is now the first index >= targetTime; check lo and lo-1
+  if (lo > 0) {
+    const prev = snapshots[lo - 1];
+    const curr = snapshots[lo];
+    return Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
+  }
+  return snapshots[lo];
 }
 
 /**

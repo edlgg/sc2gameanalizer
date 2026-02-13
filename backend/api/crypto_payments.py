@@ -4,7 +4,6 @@ Handles HD wallet derivation and payment verification for EVM chains.
 """
 import logging
 import os
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple, List
@@ -13,6 +12,8 @@ from enum import Enum
 
 from eth_account import Account
 from web3 import Web3
+
+from backend.src.database import get_connection
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ ERC20_ABI = [
 # Pro price (6 decimals for both USDC and USDT)
 # Configurable via environment variable
 def get_pro_price() -> int:
-    """Get pro price from environment variable (in USD, e.g., '19' for $19)."""
+    """Get pro price from environment variable (in USD, e.g., '29.99' for $29.99)."""
     price_str = os.getenv("PRO_PRICE_USD")
     if not price_str:
         raise RuntimeError("PRO_PRICE_USD environment variable is required")
@@ -188,7 +189,7 @@ def calculate_unique_amount(suffix: int, base_price: int) -> int:
     """
     Calculate unique payment amount based on suffix slot.
 
-    suffix=1 -> $19.001, suffix=2 -> $19.002, etc.
+    suffix=1 -> $29.991, suffix=2 -> $29.992, etc.
     Suffix is 1-999, allowing up to 999 concurrent pending payments.
     """
     return base_price + (suffix * AMOUNT_INCREMENT)
@@ -287,7 +288,7 @@ def build_eip681_uri(address: str, chain: str, token: TokenType, amount: int) ->
 
 def init_payment_tables(db_path: Path) -> None:
     """Initialize payment-related tables with migration support."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         # Check if table exists and get its schema
@@ -394,7 +395,7 @@ def create_payment(
     if not token_address:
         raise ValueError(f"Token {token.value.upper()} not available on {chain}")
 
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         # Always expire any existing pending payments for this user
@@ -479,7 +480,7 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
     Returns:
         Tuple of (is_paid, message)
     """
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -529,7 +530,7 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
 
 def get_pending_payment(db_path: Path, user_id: int) -> Optional[PaymentInfo]:
     """Get pending payment for a user if exists."""
-    with sqlite3.connect(db_path) as conn:
+    with get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
