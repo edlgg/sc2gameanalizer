@@ -246,7 +246,7 @@ def generate_snapshots(replay) -> List[Dict[str, Any]]:
     snapshots = []
     game_length_seconds = int(replay.game_length.total_seconds())
 
-    snapshot_times = list(range(0, game_length_seconds + 1, 5))
+    snapshot_times = list(range(5, game_length_seconds + 1, 5))
     snapshot_idx = 0
 
     for event in replay.events:

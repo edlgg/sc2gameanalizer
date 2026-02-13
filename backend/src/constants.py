@@ -31,7 +31,7 @@ UNIT_COSTS = {
     'Adept': {'minerals': 100, 'gas': 25, 'supply': 2},
     'HighTemplar': {'minerals': 50, 'gas': 150, 'supply': 2},
     'DarkTemplar': {'minerals': 125, 'gas': 125, 'supply': 2},
-    'Archon': {'minerals': 175, 'gas': 275, 'supply': 4},  # Average of merge costs
+    'Archon': {'minerals': 100, 'gas': 300, 'supply': 4},  # Combined cost of 2 High Templars (2x 50m/150g)
     'Observer': {'minerals': 25, 'gas': 75, 'supply': 1},
     'WarpPrism': {'minerals': 200, 'gas': 0, 'supply': 2},
     'Immortal': {'minerals': 275, 'gas': 100, 'supply': 4},

@@ -56,10 +56,10 @@ def test_snapshot_generation():
     assert len(player2_snapshots) > 0
     assert len(player1_snapshots) == len(player2_snapshots)
 
-    # Check snapshots are at 5-second intervals
+    # Check snapshots are at 5-second intervals starting from t=5
     player1_times = sorted([s['game_time_seconds'] for s in player1_snapshots])
     for i, time in enumerate(player1_times):
-        assert time == i * 5
+        assert time == (i + 1) * 5
 
 
 def test_full_pipeline():

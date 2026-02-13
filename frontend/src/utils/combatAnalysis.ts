@@ -71,7 +71,7 @@ export function calculateSpendingBreakdown(snapshots: Snapshot[]): {
         techBuildingCount += buildings[building];
       }
     }
-  } catch (e) {
+  } catch {
     // Ignore parsing errors
   }
 
