@@ -16,9 +16,10 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, Re
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import sqlite3
+import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import timedelta
 import json
@@ -687,14 +688,26 @@ async def upload_replay(
             }
         )
 
+    # Sanitize filename — prevent path traversal
+    safe_filename = PurePosixPath(file.filename).name if file.filename else "unnamed.SC2Replay"
+    if not safe_filename or safe_filename.startswith('.'):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
     # Validate file extension
-    if not file.filename.endswith('.SC2Replay'):
+    if not safe_filename.endswith('.SC2Replay'):
         raise HTTPException(status_code=400, detail="File must be a .SC2Replay file")
 
-    # Save uploaded file directly to permanent storage first
-    permanent_path = UPLOAD_DIR / file.filename
+    # Add file size limit — prevent DoS
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB — SC2 replays are typically 50KB-2MB
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB")
+
+    # Generate unique filename — prevent collisions between users
+    unique_name = f"{uuid.uuid4().hex[:8]}_{safe_filename}"
+    permanent_path = UPLOAD_DIR / unique_name
     with open(permanent_path, 'wb') as f:
-        shutil.copyfileobj(file.file, f)
+        f.write(content)
 
     try:
         # Parse the replay (using the permanent path so filename matches)
@@ -708,7 +721,7 @@ async def upload_replay(
                        player1_name, player1_race, player2_name, player2_race, result
                 FROM games
                 WHERE replay_file = ?
-            """, (file.filename,))
+            """, (unique_name,))
 
             row = cursor.fetchone()
 
@@ -748,7 +761,7 @@ async def upload_replay(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         # Log full error for debugging
-        logger.error(f"Failed to parse replay {file.filename}: {e}", exc_info=True)
+        logger.error(f"Failed to parse replay {unique_name}: {e}", exc_info=True)
         permanent_path.unlink(missing_ok=True)
         raise HTTPException(
             status_code=500,
