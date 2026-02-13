@@ -315,6 +315,75 @@ def can_upload(db_path: Path, user_id: int) -> tuple[bool, int, int]:
     return can_do, uploads_used, FREE_TIER_UPLOADS_PER_MONTH
 
 
+def atomic_check_and_reserve_upload(db_path: Path, user_id: int, game_id: int) -> tuple[bool, int, int]:
+    """
+    Atomically check upload quota and reserve a slot by inserting into user_uploads.
+
+    Uses BEGIN EXCLUSIVE to prevent TOCTOU race conditions where concurrent
+    requests could both pass the quota check before either records the upload.
+
+    Returns:
+        tuple of (allowed, uploads_used, uploads_limit)
+    """
+    conn = get_connection(db_path)
+    try:
+        conn.execute("BEGIN EXCLUSIVE")
+        cursor = conn.cursor()
+
+        # Check subscription tier
+        cursor.execute("SELECT subscription_tier FROM users WHERE id = ?", (user_id,))
+        user_row = cursor.fetchone()
+        if not user_row:
+            conn.commit()
+            return False, 0, 0
+
+        tier = user_row[0]
+
+        # Hard cap for all users
+        cursor.execute(
+            "SELECT COUNT(*) FROM user_uploads WHERE user_id = ?", (user_id,)
+        )
+        total = cursor.fetchone()[0]
+        if total >= MAX_UPLOADS_TOTAL:
+            conn.commit()
+            return False, total, MAX_UPLOADS_TOTAL
+
+        if tier == "pro":
+            # Pro users: insert and return
+            cursor.execute(
+                "INSERT OR IGNORE INTO user_uploads (user_id, game_id) VALUES (?, ?)",
+                (user_id, game_id),
+            )
+            conn.commit()
+            return True, total, -1
+
+        # Free tier: count this month's uploads
+        now = _utc_now()
+        first_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        cursor.execute(
+            "SELECT COUNT(*) FROM user_uploads WHERE user_id = ? AND uploaded_at >= ?",
+            (user_id, first_of_month.isoformat()),
+        )
+        uploads_used = cursor.fetchone()[0]
+
+        if uploads_used >= FREE_TIER_UPLOADS_PER_MONTH:
+            conn.commit()
+            return False, uploads_used, FREE_TIER_UPLOADS_PER_MONTH
+
+        # Reserve the slot
+        cursor.execute(
+            "INSERT OR IGNORE INTO user_uploads (user_id, game_id) VALUES (?, ?)",
+            (user_id, game_id),
+        )
+        conn.commit()
+        return True, uploads_used, FREE_TIER_UPLOADS_PER_MONTH
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def update_subscription(db_path: Path, user_id: int, tier: SubscriptionTier, stripe_customer_id: Optional[str] = None) -> bool:
     """Update a user's subscription tier."""
     with get_connection(db_path) as conn:

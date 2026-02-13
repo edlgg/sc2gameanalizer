@@ -59,7 +59,7 @@ def init_database(db_path: Path) -> None:
             player1_race TEXT,
             player2_name TEXT,
             player2_race TEXT,
-            result INTEGER CHECK (result IN (1, 2)),
+            result INTEGER CHECK (result IS NULL OR result IN (1, 2)),
 
             -- Pro replay flag
             is_pro_replay BOOLEAN DEFAULT 0
@@ -176,13 +176,14 @@ def init_database(db_path: Path) -> None:
     conn.close()
 
 
-def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str) -> bool:
+def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str, commit: bool = True) -> bool:
     """
     Delete a game and all its related data (snapshots, build_order_events, user_uploads) by replay_file.
 
     Args:
         conn: Database connection
         replay_file: Name of the replay file
+        commit: If True, commit the transaction after delete
 
     Returns:
         True if a game was deleted, False if not found
@@ -209,7 +210,8 @@ def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str) -> bo
         pass  # user_uploads table may not exist in batch processing contexts
     cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
 
-    conn.commit()
+    if commit:
+        conn.commit()
     return True
 
 

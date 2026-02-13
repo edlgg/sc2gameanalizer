@@ -17,7 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from pathlib import Path, PurePosixPath
-import shutil
 import sqlite3
 import uuid
 from typing import List, Dict, Any, Optional, Tuple
@@ -39,6 +38,7 @@ from backend.api.auth import (
     decode_access_token,
     track_upload,
     can_upload,
+    atomic_check_and_reserve_upload,
     update_subscription,
     SubscriptionTier,
     User,
@@ -697,7 +697,7 @@ async def upload_replay(
             detail="Authentication required. Please login or create an account."
         )
 
-    # Check upload limits for free users
+    # Check upload limits for free users (non-atomic pre-check for fast rejection)
     allowed, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
     if not allowed:
         raise HTTPException(
@@ -764,16 +764,34 @@ async def upload_replay(
             "result": row[9]
         }
 
-        # Track upload for the user
-        track_upload(DB_PATH, user.id, game_id)
-
-        # Get updated upload stats
-        _, new_uploads_used, new_uploads_limit = can_upload(DB_PATH, user.id)
+        # Atomically check quota and reserve upload slot (prevents TOCTOU race condition)
+        allowed, new_uploads_used, new_uploads_limit = atomic_check_and_reserve_upload(
+            DB_PATH, user.id, game_id
+        )
+        if not allowed:
+            # Race condition: another request used the last slot between pre-check and here.
+            # Clean up the parsed game data.
+            with get_connection(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
+                cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+                cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+                conn.commit()
+            permanent_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "upload_limit_reached",
+                    "message": f"Upload limit reached ({new_uploads_used}/{new_uploads_limit}). Upgrade to Pro for unlimited uploads.",
+                    "uploads_used": new_uploads_used,
+                    "uploads_limit": new_uploads_limit
+                }
+            )
 
         return {
             "success": True,
             "game": game,
-            "uploads_used": new_uploads_used,
+            "uploads_used": new_uploads_used + 1,
             "uploads_limit": new_uploads_limit
         }
 

@@ -16,6 +16,43 @@ from backend.src.snapshot import GameState
 from backend.src.build_order import extract_build_order_events
 
 
+# Patterns that indicate an AI/Computer player
+_AI_PATTERNS = ['A.I.', 'ИИ', 'Cheater', 'Computer', 'Bot', 'IA ', 'I.A.', 'KI ']
+
+
+def _validate_replay(replay) -> float:
+    """
+    Validate that a replay is suitable for analysis.
+
+    Checks:
+        - Must be a 1v1 game
+        - Must be at least 120 seconds long
+        - Must not be against AI/Computer
+
+    Args:
+        replay: Loaded sc2reader replay object
+
+    Returns:
+        Game length in seconds
+
+    Raises:
+        ValueError: If replay fails any validation check
+    """
+    if len(replay.players) != 2:
+        raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
+
+    game_length_seconds = replay.game_length.total_seconds()
+    if game_length_seconds < 120:
+        raise ValueError(f"Game too short for meaningful analysis ({game_length_seconds}s, minimum 120s)")
+
+    for player in replay.players:
+        for pattern in _AI_PATTERNS:
+            if pattern in player.name:
+                raise ValueError(f"Game against AI/Computer: {player.name}")
+
+    return game_length_seconds
+
+
 def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     """
     Delete existing game data and reparse a replay file.
@@ -31,24 +68,7 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     """
     # Load and validate replay BEFORE touching the database
     replay = sc2reader.load_replay(str(replay_path), load_level=4)
-
-    # Validate: must be 1v1
-    if len(replay.players) != 2:
-        raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
-
-    # Validate: must be at least 120 seconds
-    game_length_seconds = replay.game_length.total_seconds()
-    if game_length_seconds < 120:
-        raise ValueError(f"Game too short for meaningful analysis ({game_length_seconds}s, minimum 120s)")
-
-    # Validate: must not be against AI/Computer
-    players = list(replay.players)
-    ai_patterns = ['A.I.', 'ИИ', 'Cheater', 'Computer', 'Bot', 'IA ', 'I.A.', 'KI ']
-    for player in players:
-        player_name = player.name
-        for pattern in ai_patterns:
-            if pattern in player_name:
-                raise ValueError(f"Game against AI/Computer: {player_name}")
+    _validate_replay(replay)
 
     # Extract game metadata and generate snapshots
     game_data = extract_game_metadata(replay, replay_path)
@@ -110,24 +130,7 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     """
     # Load replay
     replay = sc2reader.load_replay(str(replay_path), load_level=4)
-
-    # Validate: must be 1v1
-    if len(replay.players) != 2:
-        raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
-
-    # Validate: must be at least 120 seconds
-    game_length_seconds = replay.game_length.total_seconds()
-    if game_length_seconds < 120:
-        raise ValueError(f"Game too short for meaningful analysis ({game_length_seconds}s, minimum 120s)")
-
-    # Validate: must not be against AI/Computer
-    players = list(replay.players)
-    ai_patterns = ['A.I.', 'ИИ', 'Cheater', 'Computer', 'Bot', 'IA ', 'I.A.', 'KI ']
-    for player in players:
-        player_name = player.name
-        for pattern in ai_patterns:
-            if pattern in player_name:
-                raise ValueError(f"Game against AI/Computer: {player_name}")
+    _validate_replay(replay)
 
     # Extract game metadata
     game_data = extract_game_metadata(replay, replay_path)
