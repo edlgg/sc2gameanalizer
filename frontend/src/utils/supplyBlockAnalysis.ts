@@ -32,7 +32,7 @@ export interface SupplyBlockImpact {
 function estimateSupplyCap(snapshot: Snapshot, race: string): number {
   // Starting supply by race
   const startingSupply = {
-    'Zerg': 14,
+    'Zerg': 6, // Hatchery only; Overlords counted in supply buildings
     'Terran': 15,
     'Protoss': 15,
   }[race] || 15;
@@ -72,12 +72,21 @@ function estimateSupplyCap(snapshot: Snapshot, race: string): number {
     // Overlords are in units, not buildings
     const overlords = units['Overlord'] || 0;
     supplyProvided = overlords * 8;
+    // Additional Hatcheries/Lairs/Hives provide 6 supply each
+    const hatches = (buildings['Hatchery'] || 0) + (buildings['Lair'] || 0) + (buildings['Hive'] || 0);
+    supplyProvided += Math.max(0, hatches - 1) * 6;
   } else if (race === 'Terran') {
     const depots = (buildings['SupplyDepot'] || 0) + (buildings['SupplyDepotLowered'] || 0);
     supplyProvided = depots * 8;
+    // Additional Command Centers/Orbital Commands/Planetary Fortresses provide 15 supply each
+    const ccs = (buildings['CommandCenter'] || 0) + (buildings['OrbitalCommand'] || 0) + (buildings['PlanetaryFortress'] || 0);
+    supplyProvided += Math.max(0, ccs - 1) * 15;
   } else if (race === 'Protoss') {
     const pylons = buildings['Pylon'] || 0;
     supplyProvided = pylons * 8;
+    // Additional Nexuses provide 15 supply each
+    const nexuses = buildings['Nexus'] || 0;
+    supplyProvided += Math.max(0, nexuses - 1) * 15;
   }
 
   return startingSupply + supplyProvided;
@@ -212,7 +221,7 @@ export function calculateGhostUnits(
       { name: 'Sentry', minerals: 50, gas: 100 },
     ],
     'Zerg': [
-      { name: 'Zergling', minerals: 50, gas: 0 },
+      { name: 'Zergling', minerals: 25, gas: 0 }, // per individual Zergling (spawns in pairs for 50)
       { name: 'Roach', minerals: 75, gas: 25 },
       { name: 'Hydralisk', minerals: 100, gas: 50 },
       { name: 'Mutalisk', minerals: 100, gas: 100 },
