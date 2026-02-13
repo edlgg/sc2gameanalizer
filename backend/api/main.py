@@ -1132,12 +1132,9 @@ async def compare_games(
                 "is_pro_replay": bool(row[10])
             }
 
-        # Get snapshots for both games
-        cursor.execute("""
-            SELECT game_id, game_time_seconds, player_number, race,
-                   worker_count, mineral_collection_rate, gas_collection_rate,
-                   unspent_minerals, unspent_gas, army_value_minerals, army_value_gas,
-                   army_supply, base_count, collection_efficiency, spending_efficiency
+        # Get snapshots for both games (using full column set)
+        cursor.execute(f"""
+            SELECT {SNAPSHOT_SELECT_COLUMNS}
             FROM snapshots
             WHERE game_id IN (?, ?)
             ORDER BY game_id, game_time_seconds, player_number
@@ -1147,23 +1144,9 @@ async def compare_games(
 
     snapshots = {game_id1: [], game_id2: []}
     for row in rows:
-        game_id = row[0]
-        snapshots[game_id].append({
-            "game_time_seconds": row[1],
-            "player_number": row[2],
-            "race": row[3],
-            "worker_count": row[4],
-            "mineral_collection_rate": row[5],
-            "gas_collection_rate": row[6],
-            "unspent_minerals": row[7],
-            "unspent_gas": row[8],
-            "army_value_minerals": row[9],
-            "army_value_gas": row[10],
-            "army_supply": row[11],
-            "base_count": row[12],
-            "collection_efficiency": row[13],
-            "spending_efficiency": row[14]
-        })
+        snapshot = _row_to_snapshot(row)
+        game_id = snapshot["game_id"]
+        snapshots[game_id].append(snapshot)
 
     return {
         "game1": games[game_id1],

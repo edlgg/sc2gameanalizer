@@ -117,8 +117,8 @@ class GameEmbedder:
                     snap.get('worker_count', 0),
                     snap.get('army_value_minerals', 0) + snap.get('army_value_gas', 0),
                     snap.get('base_count', 0),
-                    snap.get('collection_rate_minerals', 0),
-                    snap.get('collection_rate_gas', 0),
+                    snap.get('mineral_collection_rate', 0),
+                    snap.get('gas_collection_rate', 0),
                 ])
             else:
                 features.extend([0, 0, 0, 0, 0])
@@ -126,11 +126,11 @@ class GameEmbedder:
         # 2. Economic metrics (averaged over game)
         avg_workers = np.mean([s.get('worker_count', 0) for s in snapshots])
         avg_collection = np.mean([
-            s.get('collection_rate_minerals', 0) + s.get('collection_rate_gas', 0)
+            s.get('mineral_collection_rate', 0) + s.get('gas_collection_rate', 0)
             for s in snapshots
         ])
         avg_unspent = np.mean([
-            s.get('unspent_resources_minerals', 0) + s.get('unspent_resources_gas', 0)
+            s.get('unspent_minerals', 0) + s.get('unspent_gas', 0)
             for s in snapshots
         ])
 
@@ -280,8 +280,8 @@ class GameEmbedder:
         efficiencies = []
 
         for snap in snapshots:
-            unspent = snap.get('unspent_resources_minerals', 0) + snap.get('unspent_resources_gas', 0)
-            collection = snap.get('collection_rate_minerals', 0) + snap.get('collection_rate_gas', 0)
+            unspent = snap.get('unspent_minerals', 0) + snap.get('unspent_gas', 0)
+            collection = snap.get('mineral_collection_rate', 0) + snap.get('gas_collection_rate', 0)
 
             if collection > 0:
                 # Unspent as fraction of 1 minute of collection
@@ -417,10 +417,10 @@ class GameEmbedder:
                     'army_value_minerals': row[2],
                     'army_value_gas': row[3],
                     'base_count': row[4],
-                    'collection_rate_minerals': row[5],
-                    'collection_rate_gas': row[6],
-                    'unspent_resources_minerals': row[7],
-                    'unspent_resources_gas': row[8],
+                    'mineral_collection_rate': row[5],
+                    'gas_collection_rate': row[6],
+                    'unspent_minerals': row[7],
+                    'unspent_gas': row[8],
                     'units': row[9]
                 })
 
@@ -496,9 +496,8 @@ def find_similar_games_ml(
     if not pro_games:
         return []
 
-    # Calculate embeddings and similarities for all pro games
-    similarities = []
-    pro_embeddings = []
+    # First pass: collect all pro game embeddings and metadata
+    pro_data = []  # List of (embedding, game_metadata) tuples
 
     for pro_game in pro_games:
         pro_id, pro_length, pro_map, pro_p1_race, pro_p2_race, pro_p1_name, pro_p2_name, pro_date = pro_game
@@ -513,40 +512,59 @@ def find_similar_games_ml(
 
         # Get pro game embedding
         pro_embedding = embedder.get_embedding(pro_id, db_path, pro_player_num)
-        pro_embeddings.append(pro_embedding)
+        pro_data.append((pro_embedding, {
+            "pro_id": pro_id,
+            "pro_length": pro_length,
+            "pro_map": pro_map,
+            "pro_p1_race": pro_p1_race,
+            "pro_p2_race": pro_p2_race,
+            "pro_p1_name": pro_p1_name,
+            "pro_p2_name": pro_p2_name,
+            "pro_date": pro_date,
+            "pro_player_num": pro_player_num,
+        }))
 
-        # Calculate cosine similarity
-        similarity = cosine_similarity(
-            user_embedding.reshape(1, -1),
-            pro_embedding.reshape(1, -1)
-        )[0][0]
+    if not pro_data:
+        return []
 
-        # Convert to 0-100 percentage
-        similarity_pct = (similarity + 1) / 2 * 100  # Cosine is -1 to 1, convert to 0-100
+    # Fit scaler on pro embeddings (the reference set), then transform all
+    pro_embeddings = np.array([d[0] for d in pro_data])
+    scaler = StandardScaler()
+    scaled_pro = scaler.fit_transform(pro_embeddings)
+    scaled_user = scaler.transform(user_embedding.reshape(1, -1))
+
+    # Compute cosine similarity between scaled user embedding and all scaled pro embeddings
+    sim_scores = cosine_similarity(scaled_user, scaled_pro)[0]
+
+    # Build results
+    similarities = []
+    for i, (_, meta) in enumerate(pro_data):
+        similarity_pct = (sim_scores[i] + 1) / 2 * 100  # Cosine is -1 to 1, convert to 0-100
 
         # Map bonus
-        map_bonus = 2.0 if user_map and pro_map and user_map == pro_map else 0.0
+        map_bonus = 2.0 if user_map and meta["pro_map"] and user_map == meta["pro_map"] else 0.0
 
         # Length penalty (prefer similar length games)
-        length_diff = abs(user_length - pro_length)
+        length_diff = abs(user_length - meta["pro_length"])
         length_penalty = min(5.0, length_diff / 120)  # -5% for every 2 minutes difference
 
         final_score = min(100, similarity_pct + map_bonus - length_penalty)
 
-        matched_player_name = pro_p1_name if pro_player_num == 1 else pro_p2_name
-        matched_player_race = pro_p1_race if pro_player_num == 1 else pro_p2_race
+        pro_player_num = meta["pro_player_num"]
+        matched_player_name = meta["pro_p1_name"] if pro_player_num == 1 else meta["pro_p2_name"]
+        matched_player_race = meta["pro_p1_race"] if pro_player_num == 1 else meta["pro_p2_race"]
 
         similarities.append({
-            "game_id": int(pro_id),
+            "game_id": int(meta["pro_id"]),
             "similarity_score": float(final_score / 100),  # Normalize to 0-1 for consistency
             "ml_similarity": float(similarity_pct),
-            "game_length_seconds": int(pro_length),
-            "map_name": pro_map,
-            "player1_name": pro_p1_name,
-            "player2_name": pro_p2_name,
-            "player1_race": pro_p1_race,
-            "player2_race": pro_p2_race,
-            "game_date": pro_date,
+            "game_length_seconds": int(meta["pro_length"]),
+            "map_name": meta["pro_map"],
+            "player1_name": meta["pro_p1_name"],
+            "player2_name": meta["pro_p2_name"],
+            "player1_race": meta["pro_p1_race"],
+            "player2_race": meta["pro_p2_race"],
+            "game_date": meta["pro_date"],
             "matched_player_number": int(pro_player_num),
             "matched_player_name": matched_player_name,
             "matched_player_race": matched_player_race,
