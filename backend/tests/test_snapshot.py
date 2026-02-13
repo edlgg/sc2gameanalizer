@@ -129,7 +129,6 @@ def test_snapshot_structure():
         'upgrades',
         'base_count',
         'vision_area',
-        'unit_map_presence',
         'units_killed_value',
         'units_lost_value',
         'resources_spent_minerals',

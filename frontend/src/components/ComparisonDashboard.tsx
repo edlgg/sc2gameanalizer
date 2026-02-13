@@ -23,6 +23,8 @@ import GameOverviewHero from './GameOverviewHero';
 import EditorialSectionHeader from './EditorialSectionHeader';
 import CombatTradeAnalyzer from './CombatTradeAnalyzer';
 import SupplyBlockAnalyzer from './SupplyBlockAnalyzer';
+import ScoutingAnalyzer from './ScoutingAnalyzer';
+import UnitCompositionChart from './UnitCompositionChart';
 import WinProbabilityPredictor from './WinProbabilityPredictor';
 import SectionErrorBoundary from './SectionErrorBoundary';
 import type { Snapshot, SnapshotWithTotals, SnapshotWithArmyTotal } from '../types';
@@ -433,11 +435,28 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           </div>
           </SectionErrorBoundary>
 
+          {/* Unit Composition */}
+          <SectionErrorBoundary sectionName="Unit Composition">
+          <div className="ed-animate-in ed-animate-delay-3" style={{ marginTop: '4rem' }}>
+            <EditorialSectionHeader
+              number="03"
+              title="UNIT COMPOSITION"
+              subtitle="Army composition breakdown over time"
+            />
+            <div className="ed-chart-container">
+              <UnitCompositionChart
+                snapshots={userSnapshots}
+                title="🎯 Your Unit Composition Over Time"
+              />
+            </div>
+          </div>
+          </SectionErrorBoundary>
+
           {/* Comparison Matrix Table */}
           <SectionErrorBoundary sectionName="Comparison Matrix">
           <div className="ed-animate-in ed-animate-delay-3" style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="03"
+              number="04"
               title="COMPARISON MATRIX"
               subtitle="Side-by-side performance metrics across all selected games"
             />
@@ -456,7 +475,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Resource Spending">
           <div className="ed-animate-in ed-animate-delay-4" style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="04"
+              number="05"
               title="RESOURCE SPENDING"
               subtitle="Cumulative mineral and gas spending throughout the game"
             />
@@ -474,7 +493,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
             <SectionErrorBoundary sectionName="Build Order Timeline">
             <div className="ed-animate-in" style={{ marginTop: '4rem' }}>
               <EditorialSectionHeader
-                number="05"
+                number="06"
                 title="BUILD ORDER TIMELINE"
                 subtitle="Comparison of build order events and strategic decisions"
               />
@@ -493,7 +512,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Milestone & Strategic Analysis">
           <div style={{ marginTop: '6rem' }}>
             <EditorialSectionHeader
-              number="06"
+              number="07"
               title="MILESTONE & STRATEGIC ANALYSIS"
               subtitle="Game milestones, upgrades, unit transitions, and strategic decisions"
             />
@@ -544,7 +563,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Combat Trade Analysis">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="07"
+              number="08"
               title="COMBAT TRADE ANALYSIS"
               subtitle="Analysis of combat efficiency and army trades"
             />
@@ -561,7 +580,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Supply Block Analysis">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="08"
+              number="09"
               title="SUPPLY BLOCK ANALYSIS"
               subtitle="Supply cap efficiency and supply block detection"
             />
@@ -575,11 +594,30 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           </div>
           </SectionErrorBoundary>
 
+          {/* Scouting Intelligence Analysis */}
+          <SectionErrorBoundary sectionName="Scouting Analysis">
+          <div style={{ marginTop: '4rem' }}>
+            <EditorialSectionHeader
+              number="10"
+              title="SCOUTING INTELLIGENCE"
+              subtitle="Vision-based scouting analysis and critical timing windows"
+            />
+            <div className="ed-chart-container">
+              <ScoutingAnalyzer
+                userSnapshots={userSnapshots}
+                proSnapshotSets={proSnapshotSets}
+                userRace={userSnapshots[0]?.race || selectedPlayerRace || 'Terran'}
+                opponentRace={opponentPlayerRace || 'Terran'}
+              />
+            </div>
+          </div>
+          </SectionErrorBoundary>
+
           {/* Win Probability Analysis */}
           <SectionErrorBoundary sectionName="Win Probability">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="09"
+              number="11"
               title="WIN PROBABILITY ANALYSIS"
               subtitle="Predicted win probability throughout the game"
             />
@@ -596,7 +634,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Delta Analysis">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="10"
+              number="12"
               title="DELTA ANALYSIS"
               subtitle="Your performance difference compared to pro average"
             />
@@ -624,7 +662,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Key Moments">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="11"
+              number="13"
               title="KEY MOMENTS"
               subtitle="Critical points where performance diverged significantly"
             />
@@ -638,7 +676,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           <SectionErrorBoundary sectionName="Summary Statistics">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
-              number="12"
+              number="14"
               title="SUMMARY STATISTICS"
               subtitle="Average performance metrics across the entire game"
             />

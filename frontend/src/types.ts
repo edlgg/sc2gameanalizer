@@ -46,7 +46,6 @@ export interface Snapshot {
   // Map control
   base_count: number;
   vision_area: number;
-  unit_map_presence: Record<string, any>;
 
   // Combat/Efficiency
   units_killed_value: number;

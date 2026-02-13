@@ -99,7 +99,6 @@ def init_database(db_path: Path) -> None:
             -- Map Control
             base_count INTEGER,
             vision_area REAL,
-            unit_map_presence TEXT,  -- JSON
 
             -- Combat/Efficiency
             units_killed_value INTEGER,
@@ -279,11 +278,11 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
             unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
             army_value_minerals, army_value_gas, army_supply, units,
             buildings, upgrades,
-            base_count, vision_area, unit_map_presence,
+            base_count, vision_area,
             units_killed_value, units_lost_value,
             resources_spent_minerals, resources_spent_gas,
             collection_efficiency, spending_efficiency
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         (
             game_id,
@@ -293,7 +292,7 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
             s['total_minerals_collected'], s['total_gas_collected'],
             s['army_value_minerals'], s['army_value_gas'], s['army_supply'], s['units'],
             s['buildings'], s['upgrades'],
-            s['base_count'], s['vision_area'], s['unit_map_presence'],
+            s['base_count'], s['vision_area'],
             s['units_killed_value'], s['units_lost_value'],
             s['resources_spent_minerals'], s['resources_spent_gas'],
             s['collection_efficiency'], s['spending_efficiency']

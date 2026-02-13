@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Set, Optional
 from collections import defaultdict
 
-from backend.src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS, MORPH_SOURCES
+from backend.src.constants import UNIT_COSTS, BUILDING_COSTS, WORKER_UNITS, BASE_BUILDINGS, MORPH_SOURCES
 
 logger = logging.getLogger(__name__)
 
@@ -119,8 +119,6 @@ class GameState:
         # Unit object tracking for detailed analysis
         self.alive_units = {}  # {unit_id: unit_object}
 
-        # Map presence tracking (unit positions for approximate vision)
-        self.unit_positions = {}  # {unit_id: (x, y, unit_type)}
 
     def normalize_unit_name(self, unit_name: str) -> Optional[str]:
         """
@@ -171,6 +169,9 @@ class GameState:
         if unit_type is None:
             return
 
+        # Initial units at game start (t=0) are free — don't count as spent resources
+        is_initial = (event.second == 0)
+
         # Store unit reference for tracking (avoids double-counting)
         unit_id = unit.id if hasattr(unit, 'id') else None
 
@@ -189,6 +190,10 @@ class GameState:
             self.units[unit_type] += 1
             if unit_id:
                 self.alive_units[unit_id] = unit
+
+            # Skip resource tracking for initial units (they are free)
+            if is_initial:
+                return
 
             # Handle morph: decrement source unit that was consumed
             if unit_type in MORPH_SOURCES:
@@ -246,10 +251,18 @@ class GameState:
                     self.buildings[unit_type] += 1
 
         # Track spending for buildings only (non-building spending is tracked in _handle_unit_born)
-        if hasattr(unit, 'is_building') and unit.is_building and unit_type in UNIT_COSTS:
-            cost = UNIT_COSTS[unit_type]
-            self.resources_spent_minerals += cost['minerals']
-            self.resources_spent_gas += cost['gas']
+        # Skip initial buildings at game start (t=0) — they are free
+        if hasattr(unit, 'is_building') and unit.is_building and event.second > 0:
+            if unit_type in UNIT_COSTS:
+                cost = UNIT_COSTS[unit_type]
+            elif unit_type in BUILDING_COSTS:
+                cost = BUILDING_COSTS[unit_type]
+            else:
+                cost = None
+
+            if cost:
+                self.resources_spent_minerals += cost.get('minerals', 0)
+                self.resources_spent_gas += cost.get('gas', 0)
 
     def _handle_unit_died(self, event):
         """Handle unit/building death"""
@@ -278,12 +291,10 @@ class GameState:
                 cost = UNIT_COSTS[unit_type]
                 self.units_lost_value += cost['minerals'] + cost['gas']
 
-            # Remove from alive units and positions
+            # Remove from alive units
             if hasattr(unit, 'id'):
                 if unit.id in self.alive_units:
                     del self.alive_units[unit.id]
-                if unit.id in self.unit_positions:
-                    del self.unit_positions[unit.id]
 
         # Check if we killed an enemy unit
         # The killer/killing_player attributes are Player objects, not units
@@ -439,7 +450,6 @@ class GameState:
             # Map Control
             'base_count': base_count,
             'vision_area': self._calculate_vision_area(),
-            'unit_map_presence': json.dumps(self._calculate_unit_map_presence()),
 
             # Combat/Efficiency
             'units_killed_value': self.units_killed_value,
@@ -492,20 +502,25 @@ class GameState:
 
     def _calculate_collection_efficiency(self) -> float:
         """
-        Calculate collection efficiency.
-        Ratio of resources collected to theoretical maximum.
+        Calculate collection efficiency (0.0-1.0 scale).
+        How efficiently workers are mining relative to the theoretical optimum.
         """
-        if self.total_minerals_collected == 0:
-            return 0.0
-
-        # Simplified efficiency metric
         worker_count = self._count_workers()
         if worker_count == 0:
             return 0.0
 
-        # Rough estimate: optimal is ~1 mineral per second per worker
-        # This is simplified; actual calculation would be more complex
-        return min(1.0, self.mineral_collection_rate / (worker_count * 1.0))
+        # Convert sc2reader internal rate to minerals per real second
+        # sc2reader rates are in internal game units; divide by ~9.15 for Faster speed
+        GAME_SPEED_FACTOR = 9.15  # Faster game speed conversion
+        OPTIMAL_RATE_PER_WORKER = 0.7  # minerals/sec/worker (accounting for travel time)
+
+        mineral_rate_per_sec = self.mineral_collection_rate / GAME_SPEED_FACTOR
+        optimal_rate = worker_count * OPTIMAL_RATE_PER_WORKER
+
+        if optimal_rate == 0:
+            return 0.0
+
+        return min(1.0, mineral_rate_per_sec / optimal_rate)
 
     def _calculate_spending_efficiency(self) -> float:
         """
@@ -560,54 +575,3 @@ class GameState:
 
         return round(total_area, 2)
 
-    def _calculate_unit_map_presence(self) -> Dict[str, Any]:
-        """
-        Calculate unit map presence as a summary of unit positions.
-
-        Groups units by map quadrant and returns counts for each region.
-        Also tracks the centroid of all units as an "army center".
-
-        Returns:
-            Dictionary with map presence data
-        """
-        if not self.unit_positions:
-            return {"quadrants": {}, "army_center": None, "spread": 0}
-
-        # Collect all positions
-        positions = list(self.unit_positions.values())
-
-        # Calculate army center (centroid)
-        if positions:
-            avg_x = sum(p[0] for p in positions) / len(positions)
-            avg_y = sum(p[1] for p in positions) / len(positions)
-            army_center = (round(avg_x, 1), round(avg_y, 1))
-
-            # Calculate spread (average distance from center)
-            import math
-            total_dist = sum(
-                math.sqrt((p[0] - avg_x) ** 2 + (p[1] - avg_y) ** 2)
-                for p in positions
-            )
-            spread = round(total_dist / len(positions), 2) if positions else 0
-        else:
-            army_center = None
-            spread = 0
-
-        # Group units by type in different regions
-        # SC2 maps are typically ~200x200 units, divide into quadrants
-        quadrants = {"NW": 0, "NE": 0, "SW": 0, "SE": 0}
-        map_center = 100  # Approximate map center
-
-        for x, y, unit_type in positions:
-            if x < map_center:
-                quadrant = "NW" if y < map_center else "SW"
-            else:
-                quadrant = "NE" if y < map_center else "SE"
-            quadrants[quadrant] += 1
-
-        return {
-            "quadrants": quadrants,
-            "army_center": army_center,
-            "spread": spread,
-            "total_tracked": len(positions)
-        }

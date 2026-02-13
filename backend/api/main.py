@@ -82,12 +82,12 @@ def _row_to_snapshot(row: Tuple) -> Dict[str, Any]:
     """
     Convert a database row to a snapshot dictionary.
 
-    Expected row format (27 columns):
+    Expected row format (26 columns):
     (id, game_id, game_time_seconds, player_number, race,
      worker_count, mineral_collection_rate, gas_collection_rate,
      unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
      army_value_minerals, army_value_gas, army_supply, units,
-     buildings, upgrades, base_count, vision_area, unit_map_presence,
+     buildings, upgrades, base_count, vision_area,
      units_killed_value, units_lost_value,
      resources_spent_minerals, resources_spent_gas,
      collection_efficiency, spending_efficiency)
@@ -113,13 +113,12 @@ def _row_to_snapshot(row: Tuple) -> Dict[str, Any]:
         "upgrades": _safe_json_loads(row[17], {}),
         "base_count": row[18],
         "vision_area": row[19],
-        "unit_map_presence": _safe_json_loads(row[20], {}),
-        "units_killed_value": row[21],
-        "units_lost_value": row[22],
-        "resources_spent_minerals": row[23],
-        "resources_spent_gas": row[24],
-        "collection_efficiency": row[25],
-        "spending_efficiency": row[26]
+        "units_killed_value": row[20],
+        "units_lost_value": row[21],
+        "resources_spent_minerals": row[22],
+        "resources_spent_gas": row[23],
+        "collection_efficiency": row[24],
+        "spending_efficiency": row[25]
     }
 
 
@@ -128,7 +127,7 @@ SNAPSHOT_SELECT_COLUMNS = """
     worker_count, mineral_collection_rate, gas_collection_rate,
     unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
     army_value_minerals, army_value_gas, army_supply, units,
-    buildings, upgrades, base_count, vision_area, unit_map_presence,
+    buildings, upgrades, base_count, vision_area,
     units_killed_value, units_lost_value,
     resources_spent_minerals, resources_spent_gas,
     collection_efficiency, spending_efficiency

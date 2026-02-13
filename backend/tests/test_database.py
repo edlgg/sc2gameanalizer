@@ -61,7 +61,6 @@ def make_snapshot(game_time_seconds: int, player_number: int, race: str = "Zerg"
         "upgrades": "{}",
         "base_count": 2,
         "vision_area": 100.0,
-        "unit_map_presence": "{}",
         "units_killed_value": 0,
         "units_lost_value": 0,
         "resources_spent_minerals": 800,

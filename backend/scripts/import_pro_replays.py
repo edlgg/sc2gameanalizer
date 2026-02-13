@@ -145,7 +145,7 @@ def main():
                    worker_count, mineral_collection_rate, gas_collection_rate,
                    unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
                    army_value_minerals, army_value_gas, army_supply, units,
-                   buildings, upgrades, base_count, vision_area, unit_map_presence,
+                   buildings, upgrades, base_count, vision_area,
                    units_killed_value, units_lost_value,
                    resources_spent_minerals, resources_spent_gas,
                    collection_efficiency, spending_efficiency
@@ -161,11 +161,11 @@ def main():
                     worker_count, mineral_collection_rate, gas_collection_rate,
                     unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
                     army_value_minerals, army_value_gas, army_supply, units,
-                    buildings, upgrades, base_count, vision_area, unit_map_presence,
+                    buildings, upgrades, base_count, vision_area,
                     units_killed_value, units_lost_value,
                     resources_spent_minerals, resources_spent_gas,
                     collection_efficiency, spending_efficiency
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (new_game_id,) + snapshot)
             imported_snapshots += 1
 
