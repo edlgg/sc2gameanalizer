@@ -36,10 +36,10 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     if len(replay.players) != 2:
         raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
 
-    # Validate: must be at least 60 seconds
+    # Validate: must be at least 120 seconds
     game_length_seconds = replay.game_length.total_seconds()
-    if game_length_seconds < 60:
-        raise ValueError(f"Game too short ({game_length_seconds}s < 60s)")
+    if game_length_seconds < 120:
+        raise ValueError(f"Game too short for meaningful analysis ({game_length_seconds}s, minimum 120s)")
 
     # Validate: must not be against AI/Computer
     players = list(replay.players)
@@ -115,10 +115,10 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     if len(replay.players) != 2:
         raise ValueError(f"Not a 1v1 game (found {len(replay.players)} players)")
 
-    # Validate: must be at least 60 seconds
+    # Validate: must be at least 120 seconds
     game_length_seconds = replay.game_length.total_seconds()
-    if game_length_seconds < 60:
-        raise ValueError(f"Game too short ({game_length_seconds}s < 60s)")
+    if game_length_seconds < 120:
+        raise ValueError(f"Game too short for meaningful analysis ({game_length_seconds}s, minimum 120s)")
 
     # Validate: must not be against AI/Computer
     players = list(replay.players)

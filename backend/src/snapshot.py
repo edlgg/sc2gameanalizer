@@ -2,10 +2,16 @@
 Game state tracking and snapshot generation.
 """
 import json
+import logging
 from typing import Dict, Any, Set, Optional
 from collections import defaultdict
 
 from backend.src.constants import UNIT_COSTS, WORKER_UNITS, BASE_BUILDINGS, MORPH_SOURCES
+
+logger = logging.getLogger(__name__)
+
+# Track already-warned unit types to avoid spamming the same warning
+_warned_units: set = set()
 
 
 # Units to ignore (not real combat units)
@@ -456,9 +462,15 @@ class GameState:
         """Calculate total army value in minerals or gas"""
         total = 0
         for unit_type, count in self.units.items():
-            if unit_type not in WORKER_UNITS and unit_type in UNIT_COSTS:
+            if unit_type in WORKER_UNITS:
+                continue
+            if unit_type in UNIT_COSTS:
                 cost = UNIT_COSTS[unit_type]
                 total += cost[resource_type] * count
+            else:
+                if unit_type not in _warned_units:
+                    _warned_units.add(unit_type)
+                    logger.warning(f"Unknown unit type '{unit_type}' — excluded from army value")
         return total
 
     def _calculate_army_supply(self) -> int:

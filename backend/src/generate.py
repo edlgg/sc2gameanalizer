@@ -40,9 +40,10 @@ def main():
             print(f"⏭️  SKIP: Corrupted/unparseable replay ({type(e).__name__}: {e})")
             skipped.append((replay_file.name, f"Corrupted/unparseable ({type(e).__name__})"))
         except Exception as e:
-            # Unexpected errors should still fail
-            print(f"❌ ERROR: {type(e).__name__}: {e}")
-            raise e
+            # Log and continue — one bad replay should not abort the batch
+            print(f"⚠️  SKIPPED {replay_file.name}: {type(e).__name__}: {e}")
+            skipped.append((replay_file.name, str(e)))
+            continue
 
     print()
     print("=" * 60)

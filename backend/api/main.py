@@ -177,12 +177,19 @@ class RateLimiter:
         window_start = now - window_seconds
 
         # Clean old requests
-        self._requests[key] = [t for t in self._requests[key] if t > window_start]
+        timestamps = [t for t in self._requests.get(key, []) if t > window_start]
 
-        if len(self._requests[key]) >= max_requests:
+        if not timestamps:
+            # All timestamps are stale (or key is new) — start fresh
+            self._requests[key] = [now]
+            return True
+
+        if len(timestamps) >= max_requests:
+            self._requests[key] = timestamps
             return False
 
-        self._requests[key].append(now)
+        timestamps.append(now)
+        self._requests[key] = timestamps
         return True
 
 
@@ -278,7 +285,7 @@ async def startup_event():
     init_payment_tables(DB_PATH)
 
     # Initialize ML embedder with cache
-    cache_path = DB_PATH.parent / ".embeddings_cache.pkl"
+    cache_path = DB_PATH.parent / ".embeddings_cache.json"
     EMBEDDER = GameEmbedder(cache_path=cache_path)
 
 

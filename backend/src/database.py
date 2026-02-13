@@ -124,7 +124,7 @@ def init_database(db_path: Path) -> None:
             game_time_seconds INTEGER NOT NULL,
             is_milestone BOOLEAN DEFAULT 0,
 
-            UNIQUE(game_id, player_number, event_type, item_name)
+            UNIQUE(game_id, player_number, event_type, item_name, game_time_seconds)
         )
     """)
 

@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
-import pickle
 
 from backend.src.database import get_connection
 
@@ -41,12 +40,19 @@ class GameEmbedder:
         """Load cached embeddings if available."""
         if self.cache_path and self.cache_path.exists():
             try:
-                with open(self.cache_path, 'rb') as f:
-                    data = pickle.load(f)
-                    self.embeddings_cache = data.get('embeddings', {})
-                    self.scaler = data.get('scaler', StandardScaler())
+                with open(self.cache_path, 'r') as f:
+                    data = json.load(f)
+                    # Convert string keys back to (game_id, player_number) tuples
+                    # and lists back to numpy arrays
+                    raw = data.get('embeddings', {})
+                    self.embeddings_cache = {
+                        tuple(json.loads(k)): np.array(v, dtype=np.float32)
+                        for k, v in raw.items()
+                    }
+                    # Scaler is not cached in JSON — start fresh
+                    self.scaler = StandardScaler()
                     logger.debug(f"Loaded {len(self.embeddings_cache)} cached embeddings")
-            except (pickle.UnpicklingError, EOFError, KeyError) as e:
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.warning(f"Cache file corrupted, starting fresh: {e}")
                 self.embeddings_cache = {}
             except PermissionError as e:
@@ -60,11 +66,13 @@ class GameEmbedder:
         if self.cache_path:
             try:
                 self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.cache_path, 'wb') as f:
-                    pickle.dump({
-                        'embeddings': self.embeddings_cache,
-                        'scaler': self.scaler
-                    }, f)
+                # Convert tuple keys to JSON strings and numpy arrays to lists
+                serializable = {
+                    json.dumps(list(k)): v.tolist()
+                    for k, v in self.embeddings_cache.items()
+                }
+                with open(self.cache_path, 'w') as f:
+                    json.dump({'embeddings': serializable}, f)
             except PermissionError as e:
                 logger.warning(f"Cannot write cache file (permission denied): {e}")
             except OSError as e:
@@ -448,7 +456,7 @@ def find_similar_games_ml(
         List of similar games with similarity scores
     """
     if embedder is None:
-        cache_path = db_path.parent / '.embeddings_cache.pkl'
+        cache_path = db_path.parent / '.embeddings_cache.json'
         embedder = GameEmbedder(cache_path=cache_path)
 
     with get_connection(db_path) as conn:
