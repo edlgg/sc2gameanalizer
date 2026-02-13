@@ -143,6 +143,8 @@ export function extractKeyMoments(
   userSnapshots: Snapshot[],
   proSnapshots: Snapshot[]
 ): KeyMoment[] {
+  if (userSnapshots.length === 0 || proSnapshots.length === 0) return [];
+
   const moments: KeyMoment[] = [];
   // Generate timestamps every 3 min up to game end (dynamic, not hardcoded to 12min)
   const maxTime = Math.max(

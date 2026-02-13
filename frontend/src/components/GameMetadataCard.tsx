@@ -11,14 +11,18 @@ interface GameMetadataCardProps {
 export default function GameMetadataCard({ game, snapshots, playerNumber }: GameMetadataCardProps) {
   // Calculate stats from snapshots
   const lastSnapshot = snapshots[snapshots.length - 1];
-  const peakArmyValue = Math.max(...snapshots.map(s => s.army_value_minerals + s.army_value_gas));
-  const avgUnspentMinerals = Math.round(
-    snapshots.reduce((sum, s) => sum + s.unspent_minerals, 0) / snapshots.length
-  );
-  const avgUnspentGas = Math.round(
-    snapshots.reduce((sum, s) => sum + s.unspent_gas, 0) / snapshots.length
-  );
-  const maxBases = Math.max(...snapshots.map(s => s.base_count));
+  const peakArmyValue = snapshots.length > 0
+    ? Math.max(...snapshots.map(s => s.army_value_minerals + s.army_value_gas))
+    : 0;
+  const avgUnspentMinerals = snapshots.length > 0
+    ? Math.round(snapshots.reduce((sum, s) => sum + s.unspent_minerals, 0) / snapshots.length)
+    : 0;
+  const avgUnspentGas = snapshots.length > 0
+    ? Math.round(snapshots.reduce((sum, s) => sum + s.unspent_gas, 0) / snapshots.length)
+    : 0;
+  const maxBases = snapshots.length > 0
+    ? Math.max(...snapshots.map(s => s.base_count))
+    : 0;
 
   // Determine winner info
   const isWinner = game.result === playerNumber;

@@ -143,9 +143,11 @@ export default function ScoutingAnalyzer({
           icon={<Eye className="w-4 h-4" />}
           label="Scouting Missions"
           value={userMissions.length.toString()}
-          comparison={`Pro avg: ${Math.round(
-            proMissionsList.reduce((sum, m) => sum + m.length, 0) / proMissionsList.length
-          )}`}
+          comparison={`Pro avg: ${
+            proMissionsList.length > 0
+              ? Math.round(proMissionsList.reduce((sum, m) => sum + m.length, 0) / proMissionsList.length)
+              : 0
+          }`}
         />
 
         <StatCard

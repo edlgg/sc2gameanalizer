@@ -56,35 +56,41 @@ export default function CombatTradeAnalyzer({
       armyLossRate: proFlows.reduce((sum, f) => sum + f.metrics.armyLossRate, 0) / proFlows.length,
     };
 
-    // Average node values
-    const avgNodes = proFlows[0].nodes.map(node => {
-      const avgValue =
-        proFlows.reduce((sum, flow) => {
-          const matchingNode = flow.nodes.find(n => n.id === node.id);
-          return sum + (matchingNode?.value || 0);
-        }, 0) / proFlows.length;
-
-      return {
-        ...node,
-        value: avgValue,
-      };
+    // Collect all unique nodes from all pro flows
+    const allNodeMap = new Map<string, { id: string; label: string; color: string; values: number[] }>();
+    proFlows.forEach(flow => {
+      flow.nodes.forEach(node => {
+        if (!allNodeMap.has(node.id)) {
+          allNodeMap.set(node.id, { id: node.id, label: node.label, color: node.color, values: [] });
+        }
+        allNodeMap.get(node.id)!.values.push(node.value || 0);
+      });
     });
 
-    // Average link values
-    const avgLinks = proFlows[0].links.map(link => {
-      const avgValue =
-        proFlows.reduce((sum, flow) => {
-          const matchingLink = flow.links.find(
-            l => l.source === link.source && l.target === link.target
-          );
-          return sum + (matchingLink?.value || 0);
-        }, 0) / proFlows.length;
+    const avgNodes = Array.from(allNodeMap.values()).map(({ id, label, color, values }) => ({
+      id,
+      label,
+      color,
+      value: values.reduce((sum, v) => sum + v, 0) / values.length,
+    }));
 
-      return {
-        ...link,
-        value: avgValue,
-      };
+    // Collect all unique links from all pro flows, averaging values
+    const allLinkMap = new Map<string, { source: string; target: string; values: number[] }>();
+    proFlows.forEach(flow => {
+      flow.links.forEach(link => {
+        const key = `${link.source}->${link.target}`;
+        if (!allLinkMap.has(key)) {
+          allLinkMap.set(key, { source: link.source, target: link.target, values: [] });
+        }
+        allLinkMap.get(key)!.values.push(link.value || 0);
+      });
     });
+
+    const avgLinks = Array.from(allLinkMap.values()).map(({ source, target, values }) => ({
+      source,
+      target,
+      value: values.reduce((sum, v) => sum + v, 0) / values.length,
+    }));
 
     return {
       nodes: avgNodes,

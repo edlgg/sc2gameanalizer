@@ -243,13 +243,19 @@ function detectTurningPoints(
 
     // Threshold: 15% swing = significant
     if (Math.abs(change) > 0.15) {
+      // Find matching user snapshots by time (probabilities may be shorter than userSnapshots)
+      const prevUserSnap = findClosestSnapshot(userSnapshots, prev.time);
+      const currUserSnap = findClosestSnapshot(userSnapshots, curr.time);
+
+      if (!prevUserSnap || !currUserSnap) continue;
+
       // Find matching pro snapshot for comparison
       const proSnap = findClosestSnapshot(proSnapshots, curr.time);
 
       // Identify what caused the swing by comparing to pro
       const description = identifySwingCause(
-        userSnapshots[i - 1],
-        userSnapshots[i],
+        prevUserSnap,
+        currUserSnap,
         change > 0,
         proSnap
       );
