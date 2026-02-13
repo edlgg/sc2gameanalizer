@@ -50,7 +50,8 @@ export function calculateSpendingBreakdown(snapshots: Snapshot[]): {
 
   // Estimate expansion spending from base count
   const baseGrowth = Math.max(lastSnap.base_count - (firstSnap?.base_count || 1), 0);
-  const expansionCost = baseGrowth * 400; // ~400 minerals per expansion
+  const race = lastSnap.race;
+  const expansionCost = baseGrowth * (race === 'Zerg' ? 300 : 400); // Hatchery=300, Nexus/CC=400
 
   const economySpent = workerCost + expansionCost;
 
@@ -162,6 +163,15 @@ export function analyzeResourceFlow(snapshots: Snapshot[]): ResourceFlowData {
     { source: 'army', target: 'survived', value: armySurvived },
   ];
 
+  // Add "Other" category for unaccounted resources so the Sankey diagram balances
+  const unspentTotal = unspent;
+  const accounted = economySpent + armySpent + techSpent + unspentTotal;
+  const other = Math.max(0, totalCollected - accounted);
+  if (other > 0) {
+    nodes.push({ id: 'other', label: 'Other', value: other });
+    links.push({ source: 'collected', target: 'other', value: other });
+  }
+
   // Filter out zero-value links
   const validLinks = links.filter(link => link.value > 0);
 
@@ -232,9 +242,13 @@ export function compareResourceEfficiency(
 
   // Determine overall status (use loss rate instead of trade efficiency if no kill data)
   const hasTradeData = userFlow.metrics.tradeEfficiency > 0 && avgProTradeEff > 0;
+  // Normalize all values to similar scales before combining.
+  // tradeEfficiencyDiff is ratio-scale (~-1.5 to +1.5), while survivalRateDiff,
+  // armyLossRateDiff, and armySpendingDiff are percentage-scale (-100 to +100).
+  // Divide percentage-scale diffs by 100 so all terms are roughly -1 to +1.
   const score = hasTradeData
-    ? (tradeEfficiencyDiff * 0.5) + (survivalRateDiff * 0.3) + (armySpendingDiff * 0.2)
-    : (survivalRateDiff * 0.4) + (-armyLossRateDiff * 0.4) + (armySpendingDiff * 0.2);
+    ? (tradeEfficiencyDiff * 0.5) + (survivalRateDiff / 100 * 0.3) + (armySpendingDiff / 100 * 0.2)
+    : (survivalRateDiff / 100 * 0.4) + (-armyLossRateDiff / 100 * 0.4) + (armySpendingDiff / 100 * 0.2);
 
   let status: 'excellent' | 'good' | 'average' | 'poor';
   if (score > 0.3) status = 'excellent';
