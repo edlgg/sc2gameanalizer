@@ -56,6 +56,17 @@ export interface Snapshot {
   spending_efficiency: number;
 }
 
+/** Snapshot with army_value_total and unspent_total computed fields (used in timeline charts). */
+export interface SnapshotWithTotals extends Snapshot {
+  army_value_total: number;
+  unspent_total: number;
+}
+
+/** Snapshot with army_total computed field (used in delta charts). */
+export interface SnapshotWithArmyTotal extends Snapshot {
+  army_total: number;
+}
+
 export interface SimilarGame extends Game {
   game_id: number; // Backend returns game_id (same as id)
   similarity_score: number;

@@ -3,6 +3,9 @@
  */
 import type { Snapshot, ChartDataPoint, KeyMoment, DeltaPoint } from '../types';
 
+/** Snapshot with optional extra computed numeric fields (e.g. army_value_total). */
+type SnapshotLike = Snapshot & Record<string, unknown>;
+
 /**
  * Format seconds to MM:SS
  */
@@ -88,9 +91,9 @@ export function mergeSnapshotsForComparison(
  * Calculate delta/difference between two snapshot series
  */
 export function calculateDelta(
-  userSnapshots: Snapshot[],
-  proSnapshots: Snapshot[],
-  valueKey: keyof Snapshot,
+  userSnapshots: SnapshotLike[],
+  proSnapshots: SnapshotLike[],
+  valueKey: string,
   maxTime?: number // Optional: trim data to this time
 ): DeltaPoint[] {
   const deltaPoints: DeltaPoint[] = [];
@@ -498,10 +501,10 @@ export function calculateSnapshotRanges(
  * Includes individual pro game values for low-level comparison
  */
 export function mergeWithMultipleProGames(
-  userSnapshots: Snapshot[],
-  proSnapshotSets: Snapshot[][],
+  userSnapshots: SnapshotLike[],
+  proSnapshotSets: SnapshotLike[][],
   proGameIds: number[],
-  valueKey: keyof Snapshot,
+  valueKey: string,
   maxTime?: number // Optional: trim data to this time
 ): ChartDataPoint[] {
   const avgProSnapshots = calculateAverageSnapshots(proSnapshotSets);

@@ -25,7 +25,7 @@ import CombatTradeAnalyzer from './CombatTradeAnalyzer';
 import SupplyBlockAnalyzer from './SupplyBlockAnalyzer';
 import WinProbabilityPredictor from './WinProbabilityPredictor';
 import SectionErrorBoundary from './SectionErrorBoundary';
-import type { Snapshot } from '../types';
+import type { Snapshot, SnapshotWithTotals, SnapshotWithArmyTotal } from '../types';
 
 interface ComparisonDashboardProps {
   gameId: number;
@@ -142,7 +142,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
     const gameIds = Array.from(selectedProGameIds);
 
     // Helper to add computed fields to snapshots
-    const addComputedFields = (snapshots: Snapshot[]) => {
+    const addComputedFields = (snapshots: Snapshot[]): SnapshotWithTotals[] => {
       return snapshots.map(s => ({
         ...s,
         army_value_total: s.army_value_minerals + s.army_value_gas,
@@ -162,10 +162,10 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
         userGameEndTime ?? undefined
       ),
       armyData: mergeWithMultipleProGames(
-        userWithComputed as any,
-        proSetsWithComputed as any,
+        userWithComputed,
+        proSetsWithComputed,
         gameIds,
-        'army_value_total' as any,
+        'army_value_total',
         userGameEndTime ?? undefined
       ),
       baseData: mergeWithMultipleProGames(
@@ -176,10 +176,10 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
         userGameEndTime ?? undefined
       ),
       unspentData: mergeWithMultipleProGames(
-        userWithComputed as any,
-        proSetsWithComputed as any,
+        userWithComputed,
+        proSetsWithComputed,
         gameIds,
-        'unspent_total' as any,
+        'unspent_total',
         userGameEndTime ?? undefined
       ),
     };
@@ -191,19 +191,19 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
       return null;
     }
 
-    const userWithComputed = userSnapshots.map(s => ({
+    const userWithComputed: SnapshotWithArmyTotal[] = userSnapshots.map(s => ({
       ...s,
       army_total: s.army_value_minerals + s.army_value_gas,
     }));
 
-    const proWithComputed = avgProSnapshots.map(s => ({
+    const proWithComputed: SnapshotWithArmyTotal[] = avgProSnapshots.map(s => ({
       ...s,
       army_total: s.army_value_minerals + s.army_value_gas,
     }));
 
     return {
       workerDelta: calculateDelta(userSnapshots, avgProSnapshots, 'worker_count', userGameEndTime ?? undefined),
-      armyDelta: calculateDelta(userWithComputed as any, proWithComputed as any, 'army_total' as any, userGameEndTime ?? undefined),
+      armyDelta: calculateDelta(userWithComputed, proWithComputed, 'army_total', userGameEndTime ?? undefined),
       keyMoments: extractKeyMoments(userSnapshots, avgProSnapshots),
     };
   }, [userSnapshots, avgProSnapshots, userGameEndTime]);
