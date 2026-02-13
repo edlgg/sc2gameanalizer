@@ -356,6 +356,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           </SectionErrorBoundary>
 
           {/* Timeline Comparisons */}
+          <SectionErrorBoundary sectionName="Economy Comparison">
           <div className="ed-animate-in ed-animate-delay-2" style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
               number="02"
@@ -430,6 +431,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
               </div>
             </div>
           </div>
+          </SectionErrorBoundary>
 
           {/* Comparison Matrix Table */}
           <SectionErrorBoundary sectionName="Comparison Matrix">
@@ -451,6 +453,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
           </SectionErrorBoundary>
 
           {/* Cumulative Spending Charts */}
+          <SectionErrorBoundary sectionName="Resource Spending">
           <div className="ed-animate-in ed-animate-delay-4" style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
               number="04"
@@ -464,9 +467,11 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
               />
             </div>
           </div>
+          </SectionErrorBoundary>
 
           {/* Build Order Timeline Comparison */}
           {buildOrderData && !loadingBuildOrder && (
+            <SectionErrorBoundary sectionName="Build Order Timeline">
             <div className="ed-animate-in" style={{ marginTop: '4rem' }}>
               <EditorialSectionHeader
                 number="05"
@@ -481,6 +486,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
                 />
               </div>
             </div>
+            </SectionErrorBoundary>
           )}
 
           {/* Unit Composition & Strategic Analysis */}
@@ -580,13 +586,14 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
             <div className="ed-chart-container">
               <WinProbabilityPredictor
                 userSnapshots={userSnapshots}
-                proSnapshotSets={proSnapshotSets}
+                avgProSnapshots={avgProSnapshots}
               />
             </div>
           </div>
           </SectionErrorBoundary>
 
           {/* Delta Analysis */}
+          <SectionErrorBoundary sectionName="Delta Analysis">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
               number="10"
@@ -611,8 +618,10 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
               </div>
             </div>
           </div>
+          </SectionErrorBoundary>
 
           {/* Key Moments */}
+          <SectionErrorBoundary sectionName="Key Moments">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
               number="11"
@@ -623,8 +632,10 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
               <KeyMomentsPanel moments={deltaData.keyMoments} />
             </div>
           </div>
+          </SectionErrorBoundary>
 
           {/* Summary Stats */}
+          <SectionErrorBoundary sectionName="Summary Statistics">
           <div style={{ marginTop: '4rem' }}>
             <EditorialSectionHeader
               number="12"
@@ -707,6 +718,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
             </div>
             </div>
           </div>
+          </SectionErrorBoundary>
         </>
       )}
     </div>

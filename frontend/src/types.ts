@@ -14,6 +14,7 @@ export interface Game {
   player2_race: Race;
   result: 1 | 2;
   is_pro_replay: boolean;
+  game_speed?: string;
 }
 
 export interface Snapshot {

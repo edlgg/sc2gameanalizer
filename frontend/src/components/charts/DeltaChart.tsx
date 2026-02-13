@@ -8,6 +8,11 @@ interface DeltaChartProps {
 }
 
 export default function DeltaChart({ data, title, description }: DeltaChartProps) {
+  // Use the title prop to create unique gradient IDs (SVG gradient IDs are document-global)
+  const gradientId = title.replace(/\s+/g, '-').toLowerCase();
+  const aheadId = `ahead-${gradientId}`;
+  const behindId = `behind-${gradientId}`;
+
   // Transform data: split difference into above-zero and below-zero for correct gradient coloring
   const chartData = data.map(point => ({
     time: point.time,
@@ -66,11 +71,11 @@ export default function DeltaChart({ data, title, description }: DeltaChartProps
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
           <defs>
-            <linearGradient id="aheadGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={aheadId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
               <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
             </linearGradient>
-            <linearGradient id="behindGradient" x1="0" y1="1" x2="0" y2="0">
+            <linearGradient id={behindId} x1="0" y1="1" x2="0" y2="0">
               <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
               <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
             </linearGradient>
@@ -94,7 +99,7 @@ export default function DeltaChart({ data, title, description }: DeltaChartProps
             dataKey="ahead"
             stroke="#10b981"
             strokeWidth={2}
-            fill="url(#aheadGradient)"
+            fill={`url(#${aheadId})`}
             animationDuration={500}
             animationEasing="ease-in-out"
             legendType="none"
@@ -105,7 +110,7 @@ export default function DeltaChart({ data, title, description }: DeltaChartProps
             dataKey="behind"
             stroke="#ef4444"
             strokeWidth={2}
-            fill="url(#behindGradient)"
+            fill={`url(#${behindId})`}
             animationDuration={500}
             animationEasing="ease-in-out"
             legendType="none"

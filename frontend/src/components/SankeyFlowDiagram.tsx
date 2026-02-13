@@ -15,6 +15,10 @@ export default function SankeyFlowDiagram({
   subtitle,
   height = 400,
 }: SankeyFlowDiagramProps) {
+  if (!data || data.nodes.length === 0 || data.links.length === 0) {
+    return <div className="text-gray-500 text-center py-8">No resource flow data available</div>;
+  }
+
   // Transform data for @nivo/sankey format
   const sankeyData = {
     nodes: data.nodes.map(node => ({

@@ -9,6 +9,8 @@ interface GameMetadataCardProps {
 }
 
 export default function GameMetadataCard({ game, snapshots, playerNumber }: GameMetadataCardProps) {
+  if (snapshots.length === 0) return null;
+
   // Calculate stats from snapshots
   const lastSnapshot = snapshots[snapshots.length - 1];
   const peakArmyValue = snapshots.length > 0
@@ -29,7 +31,7 @@ export default function GameMetadataCard({ game, snapshots, playerNumber }: Game
   const winnerName = game.result === 1 ? game.player1_name : game.player2_name;
 
   // Calculate resource collection rate (per minute)
-  const gameLengthMinutes = game.game_length_seconds / 60;
+  const gameLengthMinutes = Math.max(game.game_length_seconds / 60, 0.01);
   const mineralRate = Math.round(lastSnapshot.total_minerals_collected / gameLengthMinutes);
   const gasRate = Math.round(lastSnapshot.total_gas_collected / gameLengthMinutes);
 

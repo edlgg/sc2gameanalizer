@@ -7,19 +7,23 @@ import type { Snapshot } from '../types';
 
 interface WinProbabilityPredictorProps {
   userSnapshots: Snapshot[];
-  proSnapshotSets: Snapshot[][];
+  proSnapshotSets?: Snapshot[][];
+  avgProSnapshots?: Snapshot[];
   title?: string;
 }
 
 export default function WinProbabilityPredictor({
   userSnapshots,
   proSnapshotSets,
+  avgProSnapshots: precomputedAvg,
   title = '🎯 Win Probability Analysis',
 }: WinProbabilityPredictorProps) {
-  // Calculate pro average snapshots
+  // Use pre-averaged snapshots if provided, otherwise calculate from sets
   const proAvgSnapshots = useMemo(() => {
-    return calculateAverageSnapshots(proSnapshotSets);
-  }, [proSnapshotSets]);
+    if (precomputedAvg && precomputedAvg.length > 0) return precomputedAvg;
+    if (proSnapshotSets) return calculateAverageSnapshots(proSnapshotSets);
+    return [];
+  }, [precomputedAvg, proSnapshotSets]);
 
   // Analyze win probability
   const analysis = useMemo(() => {

@@ -103,7 +103,7 @@ export default function BuildOrderComparisonTable({
               {milestoneComparisons.map((comp, index) => {
                 const statusColor = getStatusColor(comp.status);
                 const diffAbs = Math.round(Math.abs(comp.difference));
-                const diffSign = comp.difference > 0 ? '+' : '';
+                const diffSign = comp.difference > 0 ? '+' : comp.difference < 0 ? '-' : '';
 
                 return (
                   <tr
