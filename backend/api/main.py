@@ -536,7 +536,9 @@ async def create_crypto_payment(
 
     try:
         payment = create_payment(DB_PATH, user.id, payment_request.chain, token)
-        chain_config = CHAINS[payment_request.chain]
+        chain_config = CHAINS.get(payment_request.chain)
+        if not chain_config:
+            raise HTTPException(status_code=400, detail=f"Chain '{payment_request.chain}' is no longer supported")
 
         # Build QR code URI
         qr_uri = build_eip681_uri(
@@ -623,7 +625,9 @@ async def get_user_pending_payment(user: User = Depends(require_auth)):
     if not payment:
         return {"payment": None}
 
-    chain_config = CHAINS[payment.chain]
+    chain_config = CHAINS.get(payment.chain)
+    if not chain_config:
+        raise HTTPException(status_code=400, detail=f"Chain '{payment.chain}' is no longer supported")
 
     # Build QR code URI
     qr_uri = build_eip681_uri(
@@ -1223,7 +1227,7 @@ async def compare_build_orders(
     Returns:
         Build order comparison with timing differences
     """
-    from src.build_order import analyze_timing_differences
+    from backend.src.build_order import analyze_timing_differences
 
     # Verify user has access to their game
     verify_game_access(game_id, user)

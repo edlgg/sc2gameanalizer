@@ -5,6 +5,18 @@ from pathlib import Path
 
 from backend.src.database import get_connection
 
+# Whitelist of valid snapshot column names to prevent SQL injection
+VALID_SNAPSHOT_COLUMNS = {
+    "worker_count", "mineral_collection_rate", "gas_collection_rate",
+    "unspent_minerals", "unspent_gas", "total_minerals_collected", "total_gas_collected",
+    "army_value_minerals", "army_value_gas", "army_supply",
+    "base_count", "vision_area",
+    "units_killed_value", "units_lost_value",
+    "resources_spent_minerals", "resources_spent_gas",
+    "collection_efficiency", "spending_efficiency",
+    "supply_used", "supply_cap",
+}
+
 
 def main():
     """Run validation checks on the snapshot database."""
@@ -76,6 +88,8 @@ def validate_sanity_checks(db_path: Path) -> None:
     total_outliers = 0
 
     for field, min_val, max_val in checks:
+        if field not in VALID_SNAPSHOT_COLUMNS:
+            raise ValueError(f"Invalid field name: {field}")
         outliers = conn.execute(f"""
             SELECT game_id, game_time_seconds, player_number, {field}
             FROM snapshots
