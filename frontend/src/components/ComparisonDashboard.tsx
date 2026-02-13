@@ -112,7 +112,7 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
   // Memoize averaged pro snapshots — calculateAverageSnapshots is expensive (linear scan + JSON.parse)
   const avgProSnapshots = useMemo(() => {
     if (proSnapshotSets.length === 0) return [];
-    return avgProSnapshots;
+    return calculateAverageSnapshots(proSnapshotSets);
   }, [proSnapshotSets]);
 
   // Create game ID to name mapping (using matched player names)
@@ -637,10 +637,12 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
                 {
                   label: 'Avg Workers',
                   user: Math.round(userSnapshots.reduce((sum, s) => sum + s.worker_count, 0) / userSnapshots.length),
-                  pro: Math.round(
-                    avgProSnapshots.reduce((sum, s) => sum + s.worker_count, 0) /
-                      avgProSnapshots.length
-                  ),
+                  pro: avgProSnapshots.length > 0
+                    ? Math.round(
+                        avgProSnapshots.reduce((sum, s) => sum + s.worker_count, 0) /
+                          avgProSnapshots.length
+                      )
+                    : 0,
                 },
                 {
                   label: 'Avg Army Value',
@@ -648,33 +650,39 @@ export default function ComparisonDashboard({ gameId, onBack }: ComparisonDashbo
                     userSnapshots.reduce((sum, s) => sum + s.army_value_minerals + s.army_value_gas, 0) /
                       userSnapshots.length
                   ),
-                  pro: Math.round(
-                    avgProSnapshots.reduce(
-                      (sum, s) => sum + s.army_value_minerals + s.army_value_gas,
-                      0
-                    ) / avgProSnapshots.length
-                  ),
+                  pro: avgProSnapshots.length > 0
+                    ? Math.round(
+                        avgProSnapshots.reduce(
+                          (sum, s) => sum + s.army_value_minerals + s.army_value_gas,
+                          0
+                        ) / avgProSnapshots.length
+                      )
+                    : 0,
                 },
                 {
                   label: 'Avg Bases',
                   user: (
                     userSnapshots.reduce((sum, s) => sum + s.base_count, 0) / userSnapshots.length
                   ).toFixed(1),
-                  pro: (
-                    avgProSnapshots.reduce((sum, s) => sum + s.base_count, 0) /
-                    avgProSnapshots.length
-                  ).toFixed(1),
+                  pro: avgProSnapshots.length > 0
+                    ? (
+                        avgProSnapshots.reduce((sum, s) => sum + s.base_count, 0) /
+                        avgProSnapshots.length
+                      ).toFixed(1)
+                    : '0.0',
                 },
                 {
                   label: 'Spending Efficiency',
                   user: Math.round(
                     (userSnapshots.reduce((sum, s) => sum + s.spending_efficiency, 0) / userSnapshots.length) * 100
                   ),
-                  pro: Math.round(
-                    (avgProSnapshots.reduce((sum, s) => sum + s.spending_efficiency, 0) /
-                      avgProSnapshots.length) *
-                      100
-                  ),
+                  pro: avgProSnapshots.length > 0
+                    ? Math.round(
+                        (avgProSnapshots.reduce((sum, s) => sum + s.spending_efficiency, 0) /
+                          avgProSnapshots.length) *
+                          100
+                      )
+                    : 0,
                   suffix: '%',
                 },
               ].map((stat, i) => (
