@@ -122,10 +122,13 @@ export function calculateDelta(
 
     if (userValue !== undefined && proValue !== undefined) {
       const difference = userValue - proValue;
-      // Only calculate percentage when pro > 0 to avoid Infinity
-      const percentageDifference = proValue !== 0
-        ? ((userValue - proValue) / proValue) * 100
-        : 0;
+      // Handle pro=0 edge case: user having value when pro has 0 = 100% lead
+      let percentageDifference: number;
+      if (proValue === 0) {
+        percentageDifference = userValue > 0 ? 100 : 0;
+      } else {
+        percentageDifference = ((userValue - proValue) / proValue) * 100;
+      }
 
       deltaPoints.push({
         time,
@@ -232,7 +235,7 @@ export function extractKeyMoments(
 /**
  * Find snapshot closest to target time
  */
-function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
+function findClosestSnapshot(snapshots: Snapshot[], targetTime: number, maxDistance: number = Infinity): Snapshot | null {
   if (snapshots.length === 0) return null;
 
   // Binary search — snapshots are sorted by game_time_seconds
@@ -247,12 +250,19 @@ function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapsho
     }
   }
   // lo is now the first index >= targetTime; check lo and lo-1
+  let closest: Snapshot;
   if (lo > 0) {
     const prev = snapshots[lo - 1];
     const curr = snapshots[lo];
-    return Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
+    closest = Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
+  } else {
+    closest = snapshots[lo];
   }
-  return snapshots[lo];
+
+  if (maxDistance !== Infinity && Math.abs(closest.game_time_seconds - targetTime) > maxDistance) {
+    return null;
+  }
+  return closest;
 }
 
 /**
@@ -298,23 +308,14 @@ export function calculateAverageSnapshots(proSnapshotSets: Snapshot[][]): Snapsh
   const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
 
   // For each timestamp, average all numeric metrics across pro games
-  return sortedTimes.map(time => {
+  return sortedTimes.map((time): Snapshot | null => {
     const snapshotsAtTime = proSnapshotSets
-      .map(snapshots => findClosestSnapshot(snapshots, time))
+      .map(snapshots => findClosestSnapshot(snapshots, time, 30))
       .filter((snap): snap is Snapshot => snap !== null);
 
     if (snapshotsAtTime.length === 0) {
-      // Return empty snapshot if no data
-      return {
-        game_time_seconds: time,
-        worker_count: 0,
-        army_value_minerals: 0,
-        army_value_gas: 0,
-        base_count: 0,
-        unspent_minerals: 0,
-        unspent_gas: 0,
-        spending_efficiency: 0,
-      } as Snapshot;
+      // No game has data within 30s of this timestamp — skip it
+      return null;
     }
 
     // Average all numeric fields
@@ -414,7 +415,7 @@ export function calculateAverageSnapshots(proSnapshotSets: Snapshot[][]): Snapsh
     avgSnap.upgrades = avgUpgrades;
 
     return avgSnap as Snapshot;
-  });
+  }).filter((snap): snap is Snapshot => snap !== null);
 }
 
 /**
@@ -440,7 +441,7 @@ export function calculateSnapshotRanges(
   // For each timestamp, find min/max across all pro games
   sortedTimes.forEach(time => {
     const snapshotsAtTime = proSnapshotSets
-      .map(snapshots => findClosestSnapshot(snapshots, time))
+      .map(snapshots => findClosestSnapshot(snapshots, time, 30))
       .filter((snap): snap is Snapshot => snap !== null);
 
     if (snapshotsAtTime.length === 0) return;
@@ -512,16 +513,22 @@ export function mergeWithMultipleProGames(
 
   const timeMap = new Map<number, ChartDataPoint>();
 
-  // Collect all unique timestamps (up to maxTime if specified)
+  // Cap to the user game's max time so we don't show 0-filled user data
+  const userMaxTime = userSnapshots.length > 0
+    ? Math.max(...userSnapshots.map(s => s.game_time_seconds))
+    : 0;
+  const effectiveMaxTime = maxTime ? Math.min(maxTime, userMaxTime) : userMaxTime;
+
+  // Collect all unique timestamps (up to effectiveMaxTime)
   const allTimes = new Set<number>();
   userSnapshots.forEach(s => {
-    if (!maxTime || s.game_time_seconds <= maxTime) {
+    if (s.game_time_seconds <= effectiveMaxTime) {
       allTimes.add(s.game_time_seconds);
     }
   });
   proSnapshotSets.forEach(snapshots => {
     snapshots.forEach(s => {
-      if (!maxTime || s.game_time_seconds <= maxTime) {
+      if (s.game_time_seconds <= effectiveMaxTime) {
         allTimes.add(s.game_time_seconds);
       }
     });

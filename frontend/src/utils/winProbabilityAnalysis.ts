@@ -382,15 +382,19 @@ function classifyGameType(
   if (probabilities.length === 0) return 'close';
 
   const finalProb = probabilities[probabilities.length - 1].probability;
-  const startProb = probabilities[0].probability;
+
+  // Use minimum probability in first third of the game for comeback detection
+  // (startProb at t=0 is always 0.5 due to flat early-game probability, so it can never trigger < 0.4)
+  const firstThird = probabilities.slice(0, Math.ceil(probabilities.length / 3));
+  const earlyMin = Math.min(...firstThird.map(p => p.probability));
 
   // Dominant: High final probability (>80%)
   if (finalProb > 0.8) {
     return 'dominant';
   }
 
-  // Comeback: Started low (<40%), ended high (>60%)
-  if (startProb < 0.4 && finalProb > 0.6) {
+  // Comeback: Was losing early (<40% at some point in first third), ended high (>60%)
+  if (earlyMin < 0.4 && finalProb > 0.6) {
     return 'comeback';
   }
 
