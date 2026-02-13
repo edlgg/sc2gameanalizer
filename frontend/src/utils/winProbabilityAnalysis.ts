@@ -1,4 +1,5 @@
 import type { Snapshot } from '../types';
+import { findClosestSnapshot } from './formatters';
 
 export interface WinProbabilityPoint {
   time: number;
@@ -199,31 +200,6 @@ export function analyzeWinProbability(
     gameType,
     avgProbability,
   };
-}
-
-/**
- * Find closest snapshot by time
- */
-function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
-  if (snapshots.length === 0) return null;
-
-  // Binary search — snapshots are sorted by game_time_seconds
-  let lo = 0;
-  let hi = snapshots.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (snapshots[mid].game_time_seconds < targetTime) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  if (lo > 0) {
-    const prev = snapshots[lo - 1];
-    const curr = snapshots[lo];
-    return Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
-  }
-  return snapshots[lo];
 }
 
 /**

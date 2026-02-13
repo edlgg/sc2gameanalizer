@@ -235,7 +235,7 @@ export function extractKeyMoments(
 /**
  * Find snapshot closest to target time
  */
-function findClosestSnapshot(snapshots: Snapshot[], targetTime: number, maxDistance: number = Infinity): Snapshot | null {
+export function findClosestSnapshot(snapshots: Snapshot[], targetTime: number, maxDistance: number = Infinity): Snapshot | null {
   if (snapshots.length === 0) return null;
 
   // Binary search — snapshots are sorted by game_time_seconds

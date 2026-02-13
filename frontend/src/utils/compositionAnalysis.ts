@@ -6,6 +6,7 @@
  */
 
 import type { Snapshot } from '../types';
+import { findClosestSnapshot } from './formatters';
 
 /**
  * Worker unit names to exclude from composition analysis
@@ -203,12 +204,13 @@ export function detectCompositionTransitions(
   minInterval: number = 120
 ): CompositionTransition[] {
   const transitions: CompositionTransition[] = [];
-  if (compositionData.length < 2) return transitions;
+  const windowSize = 12; // 60 seconds at 5s intervals — sliding window for gradual transitions
+  if (compositionData.length < windowSize + 1) return transitions;
 
   let lastTransitionTime = -minInterval;
 
-  for (let i = 1; i < compositionData.length; i++) {
-    const prev = compositionData[i - 1];
+  for (let i = windowSize; i < compositionData.length; i++) {
+    const prev = compositionData[i - windowSize];
     const curr = compositionData[i];
 
     // Skip if too soon after last transition
@@ -559,12 +561,12 @@ export function detectDecisionPoints(
 
   // Scan through game at 30-second intervals
   for (let time = 120; time < gameLength - 150; time += 30) {
-    const userSnap = findClosestSnapshot(userSnapshots, time);
+    const userSnap = findClosestSnapshot(userSnapshots, time, 30);
     if (!userSnap) continue;
 
     // Get snapshots from all pro games at this time
     const proSnaps = proSnapshotSets
-      .map(snaps => findClosestSnapshot(snaps, time))
+      .map(snaps => findClosestSnapshot(snaps, time, 30))
       .filter(s => s !== null) as Snapshot[];
 
     if (proSnaps.length === 0) continue;
@@ -593,38 +595,6 @@ export function detectDecisionPoints(
   const deduplicated = deduplicateDecisions(decisions, 120);
 
   return deduplicated;
-}
-
-/**
- * Find snapshot closest to target time
- */
-function findClosestSnapshot(snapshots: Snapshot[], targetTime: number): Snapshot | null {
-  if (snapshots.length === 0) return null;
-
-  // Binary search — snapshots are sorted by game_time_seconds
-  let lo = 0;
-  let hi = snapshots.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (snapshots[mid].game_time_seconds < targetTime) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  // lo is now the first index >= targetTime; check lo and lo-1
-  let closest: Snapshot;
-  if (lo > 0) {
-    const prev = snapshots[lo - 1];
-    const curr = snapshots[lo];
-    closest = Math.abs(prev.game_time_seconds - targetTime) <= Math.abs(curr.game_time_seconds - targetTime) ? prev : curr;
-  } else {
-    closest = snapshots[lo];
-  }
-
-  // Only return if within 30 seconds
-  const diff = Math.abs(closest.game_time_seconds - targetTime);
-  return diff <= 30 ? closest : null;
 }
 
 /**
@@ -690,9 +660,9 @@ function detectEconomyDecision(
 
   // Check outcome 2 minutes later
   const outcomeTime = time + 120;
-  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime);
+  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime, 30);
   const proOutcomes = proSnapshotSets
-    .map(snaps => findClosestSnapshot(snaps, outcomeTime))
+    .map(snaps => findClosestSnapshot(snaps, outcomeTime, 30))
     .filter(s => s !== null) as Snapshot[];
 
   if (!userOutcome || proOutcomes.length === 0) return null;
@@ -837,9 +807,9 @@ function detectExpansionDecision(
   if (Math.abs(baseDiff) < 1) return null;
 
   // Check if this is a new divergence (wasn't true 30s ago)
-  const prevUserSnap = findClosestSnapshot(userSnapshots, time - 30);
+  const prevUserSnap = findClosestSnapshot(userSnapshots, time - 30, 30);
   const prevProSnaps = proSnapshotSets
-    .map(snaps => findClosestSnapshot(snaps, time - 30))
+    .map(snaps => findClosestSnapshot(snaps, time - 30, 30))
     .filter(s => s !== null) as Snapshot[];
 
   if (prevUserSnap && prevProSnaps.length > 0) {
@@ -850,9 +820,9 @@ function detectExpansionDecision(
 
   // Check outcome
   const outcomeTime = time + 120;
-  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime);
+  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime, 30);
   const proOutcomes = proSnapshotSets
-    .map(snaps => findClosestSnapshot(snaps, outcomeTime))
+    .map(snaps => findClosestSnapshot(snaps, outcomeTime, 30))
     .filter(s => s !== null) as Snapshot[];
 
   if (!userOutcome || proOutcomes.length === 0) return null;
@@ -1021,9 +991,9 @@ function detectTechDecision(
   };
 
   const outcomeTime = time + 150;
-  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime);
+  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime, 30);
   const proOutcomes = proSnapshotSets
-    .map(snaps => findClosestSnapshot(snaps, outcomeTime))
+    .map(snaps => findClosestSnapshot(snaps, outcomeTime, 30))
     .filter(s => s !== null) as Snapshot[];
 
   if (!userOutcome || proOutcomes.length === 0) return null;
@@ -1135,9 +1105,9 @@ function detectCompositionDecision(
 
   // Simple outcome check
   const outcomeTime = time + 120;
-  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime);
+  const userOutcome = findClosestSnapshot(userSnapshots, outcomeTime, 30);
   const proOutcomes = proSnapshotSets
-    .map(snaps => findClosestSnapshot(snaps, outcomeTime))
+    .map(snaps => findClosestSnapshot(snaps, outcomeTime, 30))
     .filter(s => s !== null) as Snapshot[];
 
   if (!userOutcome || proOutcomes.length === 0) return null;

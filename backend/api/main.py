@@ -1053,10 +1053,57 @@ async def get_snapshots_race_matched(
         target_p1_race, target_p2_race = target_game_row
 
         # Find which player has the matching race
-        if target_p1_race == user_race:
+        if target_p1_race == user_race and target_p2_race != user_race:
             target_player_number = 1
-        elif target_p2_race == user_race:
+        elif target_p2_race == user_race and target_p1_race != user_race:
             target_player_number = 2
+        elif target_p1_race == user_race and target_p2_race == user_race:
+            # Mirror matchup — pick pro player with more similar macro style
+            # Compare worker count at 5 minutes to find the closer match
+            user_snaps_query = f"""
+                SELECT {SNAPSHOT_SELECT_COLUMNS}
+                FROM snapshots
+                WHERE game_id = ? AND player_number = ? AND game_time_seconds >= 300
+                ORDER BY game_time_seconds
+                LIMIT 1
+            """
+            cursor.execute(user_snaps_query, (user_game_id, user_player_number))
+            user_5min_row = cursor.fetchone()
+
+            if user_5min_row:
+                user_5min = _row_to_snapshot(user_5min_row)
+                user_workers = user_5min["worker_count"]
+
+                # Get pro player 1 snapshot at ~5 min
+                cursor.execute(f"""
+                    SELECT {SNAPSHOT_SELECT_COLUMNS}
+                    FROM snapshots
+                    WHERE game_id = ? AND player_number = 1 AND game_time_seconds >= 300
+                    ORDER BY game_time_seconds
+                    LIMIT 1
+                """, (game_id,))
+                p1_row = cursor.fetchone()
+
+                # Get pro player 2 snapshot at ~5 min
+                cursor.execute(f"""
+                    SELECT {SNAPSHOT_SELECT_COLUMNS}
+                    FROM snapshots
+                    WHERE game_id = ? AND player_number = 2 AND game_time_seconds >= 300
+                    ORDER BY game_time_seconds
+                    LIMIT 1
+                """, (game_id,))
+                p2_row = cursor.fetchone()
+
+                if p1_row and p2_row:
+                    p1_5min = _row_to_snapshot(p1_row)
+                    p2_5min = _row_to_snapshot(p2_row)
+                    diff1 = abs(p1_5min["worker_count"] - user_workers)
+                    diff2 = abs(p2_5min["worker_count"] - user_workers)
+                    target_player_number = 1 if diff1 <= diff2 else 2
+                else:
+                    target_player_number = 1  # Fallback if snapshots missing
+            else:
+                target_player_number = 1  # Fallback if user has no 5min data
         else:
             # No matching race, return empty with explanation
             return {"snapshots": [], "message": "No player with matching race found"}
