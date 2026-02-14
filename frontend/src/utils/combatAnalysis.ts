@@ -5,6 +5,7 @@ export interface ResourceFlowData {
     id: string;
     label: string;
     value: number;
+    color?: string;
   }>;
   links: Array<{
     source: string;

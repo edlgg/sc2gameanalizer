@@ -3,9 +3,6 @@
  */
 import type { Snapshot, ChartDataPoint, KeyMoment, DeltaPoint } from '../types';
 
-/** Snapshot with optional extra computed numeric fields (e.g. army_value_total). */
-type SnapshotLike = Snapshot & Record<string, unknown>;
-
 /**
  * Format seconds to MM:SS
  */
@@ -91,8 +88,8 @@ export function mergeSnapshotsForComparison(
  * Calculate delta/difference between two snapshot series
  */
 export function calculateDelta(
-  userSnapshots: SnapshotLike[],
-  proSnapshots: SnapshotLike[],
+  userSnapshots: Snapshot[],
+  proSnapshots: Snapshot[],
   valueKey: string,
   maxTime?: number // Optional: trim data to this time
 ): DeltaPoint[] {
@@ -423,7 +420,7 @@ export function calculateAverageSnapshots(proSnapshotSets: Snapshot[][]): Snapsh
  */
 export function calculateSnapshotRanges(
   proSnapshotSets: Snapshot[][]
-): { min: SnapshotLike[], max: SnapshotLike[] } {
+): { min: Snapshot[], max: Snapshot[] } {
   if (proSnapshotSets.length === 0) return { min: [], max: [] };
   if (proSnapshotSets.length === 1) return { min: proSnapshotSets[0], max: proSnapshotSets[0] };
 
@@ -490,8 +487,8 @@ export function calculateSnapshotRanges(
       }
     });
 
-    minSnapshots.push(minSnap as SnapshotLike);
-    maxSnapshots.push(maxSnap as SnapshotLike);
+    minSnapshots.push(minSnap as Snapshot);
+    maxSnapshots.push(maxSnap as Snapshot);
   });
 
   return { min: minSnapshots, max: maxSnapshots };
@@ -502,8 +499,8 @@ export function calculateSnapshotRanges(
  * Includes individual pro game values for low-level comparison
  */
 export function mergeWithMultipleProGames(
-  userSnapshots: SnapshotLike[],
-  proSnapshotSets: SnapshotLike[][],
+  userSnapshots: Snapshot[],
+  proSnapshotSets: Snapshot[][],
   proGameIds: number[],
   valueKey: string,
   maxTime?: number // Optional: trim data to this time

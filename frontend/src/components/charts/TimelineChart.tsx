@@ -21,7 +21,6 @@ interface TimelineChartProps {
 export default function TimelineChart({
   data,
   title,
-  description,
   valueKey = 'value',
   label1 = 'You',
   label2 = 'Pro Avg',

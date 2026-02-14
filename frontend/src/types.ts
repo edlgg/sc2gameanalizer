@@ -18,6 +18,7 @@ export interface Game {
 }
 
 export interface Snapshot {
+  [key: string]: unknown;
   id: number;
   game_id: number;
   game_time_seconds: number;

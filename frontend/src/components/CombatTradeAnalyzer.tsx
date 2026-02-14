@@ -57,7 +57,7 @@ export default function CombatTradeAnalyzer({
     };
 
     // Collect all unique nodes from all pro flows
-    const allNodeMap = new Map<string, { id: string; label: string; color: string; values: number[] }>();
+    const allNodeMap = new Map<string, { id: string; label: string; color?: string; values: number[] }>();
     proFlows.forEach(flow => {
       flow.nodes.forEach(node => {
         if (!allNodeMap.has(node.id)) {

@@ -12,7 +12,7 @@ export default function EditorialHeader({ currentView, onViewChange, onUpgradeCl
   const { user } = useAuth();
 
   // Calculate uploads used/limit
-  const uploadsUsed = user?.uploads_this_month ?? 0;
+  const uploadsUsed = user?.uploads_used ?? 0;
   const uploadsLimit = user?.subscription_tier === 'pro' ? '∞' : '3';
   const uploadCounter = `${uploadsUsed}/${uploadsLimit} UPLOADS`;
 
