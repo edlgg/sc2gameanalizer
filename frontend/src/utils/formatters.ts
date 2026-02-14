@@ -423,7 +423,7 @@ export function calculateAverageSnapshots(proSnapshotSets: Snapshot[][]): Snapsh
  */
 export function calculateSnapshotRanges(
   proSnapshotSets: Snapshot[][]
-): { min: Snapshot[], max: Snapshot[] } {
+): { min: SnapshotLike[], max: SnapshotLike[] } {
   if (proSnapshotSets.length === 0) return { min: [], max: [] };
   if (proSnapshotSets.length === 1) return { min: proSnapshotSets[0], max: proSnapshotSets[0] };
 
@@ -490,8 +490,8 @@ export function calculateSnapshotRanges(
       }
     });
 
-    minSnapshots.push(minSnap as Snapshot);
-    maxSnapshots.push(maxSnap as Snapshot);
+    minSnapshots.push(minSnap as SnapshotLike);
+    maxSnapshots.push(maxSnap as SnapshotLike);
   });
 
   return { min: minSnapshots, max: maxSnapshots };
