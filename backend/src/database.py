@@ -1,181 +1,210 @@
 """
 Database schema and operations for SC2 replay snapshots.
 """
-import sqlite3
-from pathlib import Path
+import os
+from contextlib import contextmanager
 from typing import Dict, List, Any
 
-
-def get_connection(db_path: Path) -> sqlite3.Connection:
-    """
-    Create a database connection with foreign keys enabled.
-
-    Args:
-        db_path: Path to the SQLite database file
-
-    Returns:
-        sqlite3.Connection with PRAGMA foreign_keys = ON
-    """
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+import psycopg2
+import psycopg2.pool
+import psycopg2.errors
 
 
-def init_database(db_path: Path) -> None:
+_pool = None
+
+
+def get_database_url():
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    return url
+
+
+def init_pool():
+    global _pool
+    _pool = psycopg2.pool.SimpleConnectionPool(1, 10, get_database_url())
+
+
+def close_pool():
+    global _pool
+    if _pool is not None:
+        _pool.closeall()
+        _pool = None
+
+
+@contextmanager
+def get_connection():
+    global _pool
+    if _pool is None:
+        init_pool()
+    conn = _pool.getconn()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
+
+
+def get_connection_direct():
+    global _pool
+    if _pool is None:
+        init_pool()
+    return _pool.getconn()
+
+
+def return_connection(conn):
+    global _pool
+    if _pool is not None:
+        _pool.putconn(conn)
+
+
+def init_database() -> None:
     """
     Initialize the database with games and snapshots tables.
     Safe to call multiple times - uses CREATE IF NOT EXISTS.
-
-    Args:
-        db_path: Path to the SQLite database file
     """
-    conn = get_connection(db_path)
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
 
-    # Enable WAL mode and performance PRAGMAs
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.execute("PRAGMA cache_size=-64000")
+        # Create games table (safe to call multiple times)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS games (
+                id SERIAL PRIMARY KEY,
+                replay_file TEXT NOT NULL UNIQUE,
 
-    # Create games table (safe to call multiple times)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS games (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            replay_file TEXT NOT NULL UNIQUE,
+                -- Game Metadata
+                game_date TIMESTAMP,
+                game_length_seconds INTEGER,
+                map_name TEXT,
+                game_version TEXT,
+                build_number INTEGER,
+                expansion TEXT,
+                game_type TEXT,
+                game_speed TEXT,
+                region TEXT,
 
-            -- Game Metadata
-            game_date TIMESTAMP,
-            game_length_seconds INTEGER,
-            map_name TEXT,
-            game_version TEXT,
-            build_number INTEGER,
-            expansion TEXT,
-            game_type TEXT,
-            game_speed TEXT,
-            region TEXT,
+                -- Players
+                player1_name TEXT,
+                player1_race TEXT,
+                player2_name TEXT,
+                player2_race TEXT,
+                result INTEGER CHECK (result IS NULL OR result IN (1, 2)),
 
-            -- Players
-            player1_name TEXT,
-            player1_race TEXT,
-            player2_name TEXT,
-            player2_race TEXT,
-            result INTEGER CHECK (result IS NULL OR result IN (1, 2)),
+                -- Pro replay flag
+                is_pro_replay BOOLEAN DEFAULT FALSE
+            )
+        """)
 
-            -- Pro replay flag
-            is_pro_replay BOOLEAN DEFAULT 0
-        )
-    """)
+        # Create snapshots table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS snapshots (
+                id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
+                game_time_seconds INTEGER,
+                player_number INTEGER CHECK (player_number IN (1, 2)),
+                race TEXT,
 
-    # Create snapshots table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
-            game_time_seconds INTEGER,
-            player_number INTEGER CHECK (player_number IN (1, 2)),
-            race TEXT,
+                -- Economy
+                worker_count INTEGER CHECK (worker_count >= 0),
+                mineral_collection_rate REAL,
+                gas_collection_rate REAL,
+                unspent_minerals INTEGER,
+                unspent_gas INTEGER,
+                total_minerals_collected INTEGER,
+                total_gas_collected INTEGER,
 
-            -- Economy
-            worker_count INTEGER CHECK (worker_count >= 0),
-            mineral_collection_rate REAL,
-            gas_collection_rate REAL,
-            unspent_minerals INTEGER,
-            unspent_gas INTEGER,
-            total_minerals_collected INTEGER,
-            total_gas_collected INTEGER,
+                -- Army
+                army_value_minerals INTEGER CHECK (army_value_minerals >= 0),
+                army_value_gas INTEGER CHECK (army_value_gas >= 0),
+                army_supply INTEGER,
+                units TEXT,  -- JSON
 
-            -- Army
-            army_value_minerals INTEGER CHECK (army_value_minerals >= 0),
-            army_value_gas INTEGER CHECK (army_value_gas >= 0),
-            army_supply INTEGER,
-            units TEXT,  -- JSON
+                -- Buildings
+                buildings TEXT,  -- JSON
 
-            -- Buildings
-            buildings TEXT,  -- JSON
+                -- Upgrades
+                upgrades TEXT,  -- JSON
 
-            -- Upgrades
-            upgrades TEXT,  -- JSON
+                -- Map Control
+                base_count INTEGER,
+                vision_area REAL,
 
-            -- Map Control
-            base_count INTEGER,
-            vision_area REAL,
+                -- Combat/Efficiency
+                units_killed_value INTEGER,
+                units_lost_value INTEGER,
+                resources_spent_minerals INTEGER,
+                resources_spent_gas INTEGER,
+                collection_efficiency REAL,
+                spending_efficiency REAL,
 
-            -- Combat/Efficiency
-            units_killed_value INTEGER,
-            units_lost_value INTEGER,
-            resources_spent_minerals INTEGER,
-            resources_spent_gas INTEGER,
-            collection_efficiency REAL,
-            spending_efficiency REAL,
+                UNIQUE(game_id, game_time_seconds, player_number)
+            )
+        """)
 
-            UNIQUE(game_id, game_time_seconds, player_number)
-        )
-    """)
+        # Create build_order_events table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS build_order_events (
+                id SERIAL PRIMARY KEY,
+                game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
+                player_number INTEGER CHECK (player_number IN (1, 2)),
+                event_type TEXT CHECK (event_type IN ('building', 'unit', 'upgrade')),
+                item_name TEXT NOT NULL,
+                game_time_seconds INTEGER NOT NULL,
+                is_milestone BOOLEAN DEFAULT FALSE,
 
-    # Create build_order_events table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS build_order_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game_id INTEGER REFERENCES games(id) ON DELETE CASCADE,
-            player_number INTEGER CHECK (player_number IN (1, 2)),
-            event_type TEXT CHECK (event_type IN ('building', 'unit', 'upgrade')),
-            item_name TEXT NOT NULL,
-            game_time_seconds INTEGER NOT NULL,
-            is_milestone BOOLEAN DEFAULT 0,
+                UNIQUE(game_id, player_number, event_type, item_name, game_time_seconds)
+            )
+        """)
 
-            UNIQUE(game_id, player_number, event_type, item_name, game_time_seconds)
-        )
-    """)
+        # Create indexes (IF NOT EXISTS for idempotency)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_game_time
+            ON snapshots(game_id, game_time_seconds)
+        """)
 
-    # Create indexes (IF NOT EXISTS for idempotency)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_game_time
-        ON snapshots(game_id, game_time_seconds)
-    """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_player
+            ON snapshots(game_id, player_number)
+        """)
 
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_player
-        ON snapshots(game_id, player_number)
-    """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_build_order_game
+            ON build_order_events(game_id, player_number)
+        """)
 
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_build_order_game
-        ON build_order_events(game_id, player_number)
-    """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_build_order_milestones
+            ON build_order_events(is_milestone)
+        """)
 
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_build_order_milestones
-        ON build_order_events(is_milestone)
-    """)
+        # Additional indexes for performance (from production audit)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_is_pro_replay
+            ON games(is_pro_replay)
+        """)
 
-    # Additional indexes for performance (from production audit)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_is_pro_replay
-        ON games(is_pro_replay)
-    """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_matchup
+            ON games(player1_race, player2_race)
+        """)
 
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_matchup
-        ON games(player1_race, player2_race)
-    """)
+        # Composite index for the most common snapshot query pattern
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_snapshots_game_player_time
+            ON snapshots(game_id, player_number, game_time_seconds)
+        """)
 
-    # Composite index for the most common snapshot query pattern
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_snapshots_game_player_time
-        ON snapshots(game_id, player_number, game_time_seconds)
-    """)
-
-    # Composite index for similarity batch queries
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_pro_matchup
-        ON games(is_pro_replay, player1_race, player2_race)
-    """)
-
-    conn.commit()
-    conn.close()
+        # Composite index for similarity batch queries
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_pro_matchup
+            ON games(is_pro_replay, player1_race, player2_race)
+        """)
 
 
-def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str, commit: bool = True) -> bool:
+def delete_game_by_replay_file(conn, replay_file: str, commit: bool = True) -> bool:
     """
     Delete a game and all its related data (snapshots, build_order_events, user_uploads) by replay_file.
 
@@ -190,7 +219,7 @@ def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str, commi
     cursor = conn.cursor()
 
     # Get the game_id first
-    cursor.execute("SELECT id FROM games WHERE replay_file = ?", (replay_file,))
+    cursor.execute("SELECT id FROM games WHERE replay_file = %s", (replay_file,))
     result = cursor.fetchone()
 
     if result is None:
@@ -201,20 +230,20 @@ def delete_game_by_replay_file(conn: sqlite3.Connection, replay_file: str, commi
     # Delete in order: child tables first, then game
     # Belt-and-suspenders with CASCADE — explicit deletes ensure cleanup
     # even if FK enforcement is off on this connection
-    cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
-    cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+    cursor.execute("DELETE FROM build_order_events WHERE game_id = %s", (game_id,))
+    cursor.execute("DELETE FROM snapshots WHERE game_id = %s", (game_id,))
     try:
-        cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
-    except sqlite3.OperationalError:
-        pass  # user_uploads table may not exist in batch processing contexts
-    cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+        cursor.execute("DELETE FROM user_uploads WHERE game_id = %s", (game_id,))
+    except psycopg2.errors.UndefinedTable:
+        conn.rollback()  # Clear the error state
+    cursor.execute("DELETE FROM games WHERE id = %s", (game_id,))
 
     if commit:
         conn.commit()
     return True
 
 
-def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any], commit: bool = True) -> int:
+def insert_game(conn, game_data: Dict[str, Any], commit: bool = True) -> int:
     """
     Insert a game record into the database.
 
@@ -234,7 +263,8 @@ def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any], commit: boo
             game_version, build_number, expansion, game_type, game_speed, region,
             player1_name, player1_race, player2_name, player2_race, result,
             is_pro_replay
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (
         game_data['replay_file'],
         game_data.get('game_date'),
@@ -254,12 +284,14 @@ def insert_game(conn: sqlite3.Connection, game_data: Dict[str, Any], commit: boo
         game_data.get('is_pro_replay', False)
     ))
 
+    game_id = cursor.fetchone()[0]
+
     if commit:
         conn.commit()
-    return cursor.lastrowid
+    return game_id
 
 
-def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dict[str, Any]], commit: bool = True) -> None:
+def insert_snapshots(conn, game_id: int, snapshots: List[Dict[str, Any]], commit: bool = True) -> None:
     """
     Insert snapshot records into the database.
 
@@ -271,20 +303,20 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
     """
     cursor = conn.cursor()
 
-    cursor.executemany("""
-        INSERT INTO snapshots (
-            game_id, game_time_seconds, player_number, race,
-            worker_count, mineral_collection_rate, gas_collection_rate,
-            unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
-            army_value_minerals, army_value_gas, army_supply, units,
-            buildings, upgrades,
-            base_count, vision_area,
-            units_killed_value, units_lost_value,
-            resources_spent_minerals, resources_spent_gas,
-            collection_efficiency, spending_efficiency
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, [
-        (
+    for s in snapshots:
+        cursor.execute("""
+            INSERT INTO snapshots (
+                game_id, game_time_seconds, player_number, race,
+                worker_count, mineral_collection_rate, gas_collection_rate,
+                unspent_minerals, unspent_gas, total_minerals_collected, total_gas_collected,
+                army_value_minerals, army_value_gas, army_supply, units,
+                buildings, upgrades,
+                base_count, vision_area,
+                units_killed_value, units_lost_value,
+                resources_spent_minerals, resources_spent_gas,
+                collection_efficiency, spending_efficiency
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
             game_id,
             s['game_time_seconds'], s['player_number'], s['race'],
             s['worker_count'], s['mineral_collection_rate'], s['gas_collection_rate'],
@@ -296,15 +328,13 @@ def insert_snapshots(conn: sqlite3.Connection, game_id: int, snapshots: List[Dic
             s['units_killed_value'], s['units_lost_value'],
             s['resources_spent_minerals'], s['resources_spent_gas'],
             s['collection_efficiency'], s['spending_efficiency']
-        )
-        for s in snapshots
-    ])
+        ))
 
     if commit:
         conn.commit()
 
 
-def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_number: int, events: List[Dict[str, Any]], commit: bool = True) -> None:
+def insert_build_order_events(conn, game_id: int, player_number: int, events: List[Dict[str, Any]], commit: bool = True) -> None:
     """
     Insert build order events into the database.
 
@@ -317,18 +347,17 @@ def insert_build_order_events(conn: sqlite3.Connection, game_id: int, player_num
     """
     cursor = conn.cursor()
 
-    cursor.executemany("""
-        INSERT OR IGNORE INTO build_order_events (
-            game_id, player_number, event_type, item_name, game_time_seconds, is_milestone
-        ) VALUES (?, ?, ?, ?, ?, ?)
-    """, [
-        (
+    for event in events:
+        cursor.execute("""
+            INSERT INTO build_order_events (
+                game_id, player_number, event_type, item_name, game_time_seconds, is_milestone
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+        """, (
             game_id, player_number,
             event['event_type'], event['item_name'],
             event['game_time_seconds'], event.get('is_milestone', False)
-        )
-        for event in events
-    ])
+        ))
 
     if commit:
         conn.commit()

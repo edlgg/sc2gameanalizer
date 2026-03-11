@@ -5,7 +5,6 @@ Handles HD wallet derivation and payment verification for EVM chains.
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional, Tuple, List
 from dataclasses import dataclass
 from enum import Enum
@@ -284,19 +283,27 @@ def build_eip681_uri(address: str, chain: str, token: TokenType, amount: int) ->
     return uri
 
 
-def init_payment_tables(db_path: Path) -> None:
+def init_payment_tables() -> None:
     """Initialize payment-related tables with migration support."""
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Check if table exists and get its schema
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pending_payments'")
+        # Check if table exists
+        cursor.execute(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_name=%s",
+            ('pending_payments',)
+        )
         table_exists = cursor.fetchone() is not None
 
         if table_exists:
             # Check if we need to migrate (old schema has address_index column)
-            cursor.execute("PRAGMA table_info(pending_payments)")
-            columns = {row[1] for row in cursor.fetchall()}
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='public' AND table_name=%s",
+                ('pending_payments',)
+            )
+            columns = {row[0] for row in cursor.fetchall()}
 
             if 'address_index' in columns:
                 # Migration needed: old schema -> new schema
@@ -312,7 +319,7 @@ def init_payment_tables(db_path: Path) -> None:
                 # Create new table with updated schema
                 cursor.execute("""
                     CREATE TABLE pending_payments_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id SERIAL PRIMARY KEY,
                         user_id INTEGER NOT NULL REFERENCES users(id),
                         amount INTEGER NOT NULL,
                         token TEXT NOT NULL DEFAULT 'usdc' CHECK (token IN ('usdc', 'usdt')),
@@ -343,8 +350,8 @@ def init_payment_tables(db_path: Path) -> None:
         else:
             # Create new table with treasury-direct schema
             cursor.execute("""
-                CREATE TABLE pending_payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CREATE TABLE IF NOT EXISTS pending_payments (
+                    id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id),
                     amount INTEGER NOT NULL,
                     token TEXT NOT NULL DEFAULT 'usdc' CHECK (token IN ('usdc', 'usdt')),
@@ -368,11 +375,8 @@ def init_payment_tables(db_path: Path) -> None:
             ON pending_payments(user_id, status)
         """)
 
-        conn.commit()
-
 
 def create_payment(
-    db_path: Path,
     user_id: int,
     chain: str = "base",
     token: TokenType = TokenType.USDC
@@ -393,7 +397,7 @@ def create_payment(
     if not token_address:
         raise ValueError(f"Token {token.value.upper()} not available on {chain}")
 
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Always expire any existing pending payments for this user
@@ -401,7 +405,7 @@ def create_payment(
         cursor.execute("""
             UPDATE pending_payments
             SET status = 'expired'
-            WHERE user_id = ? AND status = 'pending'
+            WHERE user_id = %s AND status = 'pending'
         """, (user_id,))
 
         # Get treasury address and current balance
@@ -420,11 +424,11 @@ def create_payment(
         cursor.execute("""
             INSERT INTO pending_payments
             (user_id, amount, token, chain, treasury_balance_before, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (user_id, unique_amount, token.value, chain, treasury_balance, expires_at.isoformat()))
 
-        payment_id = cursor.lastrowid
-        conn.commit()
+        payment_id = cursor.fetchone()[0]
 
     return PaymentInfo(
         id=payment_id,
@@ -468,7 +472,7 @@ def check_token_balance(address: str, chain: str, token: TokenType) -> int:
         return 0
 
 
-def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
+def verify_payment(payment_id: int) -> Tuple[bool, str]:
     """
     Verify if a payment has been received at the treasury address.
 
@@ -478,13 +482,13 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
     Returns:
         Tuple of (is_paid, message)
     """
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT user_id, amount, token, chain, status, expires_at, treasury_balance_before
             FROM pending_payments
-            WHERE id = ?
+            WHERE id = %s
         """, (payment_id,))
 
         row = cursor.fetchone()
@@ -497,12 +501,11 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
         if status == "confirmed":
             return True, "Payment already confirmed"
 
-        expires_dt = _parse_datetime(expires_at)
+        expires_dt = _parse_datetime(expires_at) if isinstance(expires_at, str) else expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
         if status == "expired" or expires_dt < _utc_now():
             cursor.execute("""
-                UPDATE pending_payments SET status = 'expired' WHERE id = ?
+                UPDATE pending_payments SET status = 'expired' WHERE id = %s
             """, (payment_id,))
-            conn.commit()
             return False, "Payment expired. Contact support for late payments."
 
         # Check treasury balance
@@ -520,9 +523,8 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
             cursor.execute("""
                 UPDATE pending_payments
                 SET status = 'confirmed'
-                WHERE id = ?
+                WHERE id = %s
             """, (payment_id,))
-            conn.commit()
             return True, "Payment confirmed"
 
         # Calculate how much we're still waiting for
@@ -530,15 +532,15 @@ def verify_payment(db_path: Path, payment_id: int) -> Tuple[bool, str]:
         return False, f"Waiting for ${amount_display:.3f} {token.value.upper()}"
 
 
-def get_pending_payment(db_path: Path, user_id: int) -> Optional[PaymentInfo]:
+def get_pending_payment(user_id: int) -> Optional[PaymentInfo]:
     """Get pending payment for a user if exists."""
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
             SELECT id, amount, token, chain, status, created_at, expires_at, tx_hash
             FROM pending_payments
-            WHERE user_id = ? AND status = 'pending' AND expires_at > ?
+            WHERE user_id = %s AND status = 'pending' AND expires_at > %s
             ORDER BY created_at DESC
             LIMIT 1
         """, (user_id, _utc_now().isoformat()))
@@ -551,6 +553,18 @@ def get_pending_payment(db_path: Path, user_id: int) -> Optional[PaymentInfo]:
     # Always return treasury address (all payments go to same address)
     treasury_address = get_treasury_address()
 
+    created_at = row[5]
+    expires_at = row[6]
+    # Handle both string and datetime returns from PostgreSQL
+    if isinstance(created_at, str):
+        created_at = _parse_datetime(created_at)
+    elif created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if isinstance(expires_at, str):
+        expires_at = _parse_datetime(expires_at)
+    elif expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
     return PaymentInfo(
         id=row[0],
         user_id=user_id,
@@ -559,8 +573,8 @@ def get_pending_payment(db_path: Path, user_id: int) -> Optional[PaymentInfo]:
         token=TokenType(row[2]),
         chain=row[3],
         status=PaymentStatus(row[4]),
-        created_at=_parse_datetime(row[5]),
-        expires_at=_parse_datetime(row[6]),
+        created_at=created_at,
+        expires_at=expires_at,
         tx_hash=row[7],
     )
 

@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from pathlib import Path, PurePosixPath
-import sqlite3
+import psycopg2
 import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import timedelta
@@ -26,7 +26,7 @@ import os
 from pydantic import BaseModel, EmailStr
 
 from backend.src.parser import parse_replay_file
-from backend.src.database import init_database, get_connection
+from backend.src.database import init_database, get_connection, init_pool, close_pool, get_connection_direct, return_connection
 from backend.api.similarity import find_similar_games
 from backend.api.ml_similarity import find_similar_games_ml, GameEmbedder
 from backend.api.auth import (
@@ -257,10 +257,6 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
-# Database path
-DB_PATH = Path(__file__).parent.parent / "data" / "replays.db"
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
 # Upload directory for replay files
 UPLOAD_DIR = Path(__file__).parent.parent / "data" / "replays"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -274,18 +270,25 @@ async def startup_event():
     """Initialize database on startup if it doesn't exist."""
     global EMBEDDER
 
-    if not DB_PATH.exists():
-        init_database(DB_PATH)
+    init_pool()
+    init_database()
 
     # Initialize user tables (safe to call multiple times)
-    init_user_tables(DB_PATH)
+    init_user_tables()
 
     # Initialize payment tables
-    init_payment_tables(DB_PATH)
+    init_payment_tables()
 
     # Initialize ML embedder with cache
-    cache_path = DB_PATH.parent / ".embeddings_cache.json"
+    cache_path = Path(__file__).parent.parent / "data" / ".embeddings_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
     EMBEDDER = GameEmbedder(cache_path=cache_path)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection pool on shutdown."""
+    close_pool()
 
 
 async def get_current_user(
@@ -307,7 +310,7 @@ async def get_current_user(
     if not user_id:
         return None
 
-    return get_user_by_id(DB_PATH, int(user_id))
+    return get_user_by_id(int(user_id))
 
 
 async def require_auth(
@@ -328,7 +331,7 @@ async def require_auth(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
 
-    user = get_user_by_id(DB_PATH, int(user_id))
+    user = get_user_by_id(int(user_id))
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
@@ -343,8 +346,7 @@ def verify_game_access(game_id: int, user: User) -> dict:
     - Pro replays (accessible to all authenticated users)
     - Their own uploaded games
     """
-    with get_connection(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -352,15 +354,26 @@ def verify_game_access(game_id: int, user: User) -> dict:
                    player1_name, player1_race, player2_name, player2_race, result,
                    is_pro_replay
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (game_id,))
 
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Game not found")
 
-        game = dict(row)
-        game['is_pro_replay'] = bool(game['is_pro_replay'])
+        game = {
+            "id": row[0],
+            "replay_file": row[1],
+            "game_date": row[2],
+            "game_length_seconds": row[3],
+            "map_name": row[4],
+            "player1_name": row[5],
+            "player1_race": row[6],
+            "player2_name": row[7],
+            "player2_race": row[8],
+            "result": row[9],
+            "is_pro_replay": bool(row[10]),
+        }
 
         # Pro replays are accessible to all authenticated users
         if game['is_pro_replay']:
@@ -368,7 +381,7 @@ def verify_game_access(game_id: int, user: User) -> dict:
 
         # Check if user owns this game
         cursor.execute(
-            "SELECT 1 FROM user_uploads WHERE user_id = ? AND game_id = ?",
+            "SELECT 1 FROM user_uploads WHERE user_id = %s AND game_id = %s",
             (user.id, game_id)
         )
         if not cursor.fetchone():
@@ -400,7 +413,7 @@ async def register(request: Request, user_data: UserRegister):
     if len(user_data.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
-    user = create_user(DB_PATH, user_data.email, user_data.password)
+    user = create_user(user_data.email, user_data.password)
     if not user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -411,7 +424,7 @@ async def register(request: Request, user_data: UserRegister):
     )
 
     # Get upload stats
-    _, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
+    _, uploads_used, uploads_limit = can_upload(user.id)
 
     return TokenResponse(
         access_token=access_token,
@@ -436,7 +449,7 @@ async def login(request: Request, user_data: UserLogin):
     """
     check_rate_limit(request, max_requests=10, window_seconds=60)
 
-    user = authenticate_user(DB_PATH, user_data.email, user_data.password)
+    user = authenticate_user(user_data.email, user_data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -447,7 +460,7 @@ async def login(request: Request, user_data: UserLogin):
     )
 
     # Get upload stats
-    _, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
+    _, uploads_used, uploads_limit = can_upload(user.id)
 
     return TokenResponse(
         access_token=access_token,
@@ -467,7 +480,7 @@ async def get_me(user: User = Depends(require_auth)):
     """
     Get current authenticated user info.
     """
-    _, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
+    _, uploads_used, uploads_limit = can_upload(user.id)
 
     return UserResponse(
         id=user.id,
@@ -541,7 +554,7 @@ async def create_crypto_payment(
         raise HTTPException(status_code=400, detail=f"Unsupported token: {payment_request.token}")
 
     try:
-        payment = create_payment(DB_PATH, user.id, payment_request.chain, token)
+        payment = create_payment(user.id, payment_request.chain, token)
         chain_config = CHAINS.get(payment_request.chain)
         if not chain_config:
             raise HTTPException(status_code=400, detail=f"Chain '{payment_request.chain}' is no longer supported")
@@ -588,21 +601,21 @@ async def check_payment_status(
     No sweeping needed - funds go directly to treasury with unique amounts.
     """
     # Verify the requesting user owns this payment (return 404 to avoid leaking existence)
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM pending_payments WHERE id = ?", (payment_id,))
+        cursor.execute("SELECT user_id FROM pending_payments WHERE id = %s", (payment_id,))
         row = cursor.fetchone()
         if not row or row[0] != user.id:
             raise HTTPException(status_code=404, detail="Payment not found")
 
-    is_paid, message = verify_payment(DB_PATH, payment_id)
+    is_paid, message = verify_payment(payment_id)
 
     if is_paid:
         # Upgrade user to Pro
-        update_subscription(DB_PATH, user.id, SubscriptionTier.PRO)
+        update_subscription(user.id, SubscriptionTier.PRO)
 
         # Refresh user data
-        _, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
+        _, uploads_used, uploads_limit = can_upload(user.id)
 
         return {
             "status": "confirmed",
@@ -626,7 +639,7 @@ async def check_payment_status(
 @app.get("/api/payment/pending")
 async def get_user_pending_payment(user: User = Depends(require_auth)):
     """Get any pending payment for the current user."""
-    payment = get_pending_payment(DB_PATH, user.id)
+    payment = get_pending_payment(user.id)
 
     if not payment:
         return {"payment": None}
@@ -697,7 +710,7 @@ async def upload_replay(
         )
 
     # Check upload limits for free users (non-atomic pre-check for fast rejection)
-    allowed, uploads_used, uploads_limit = can_upload(DB_PATH, user.id)
+    allowed, uploads_used, uploads_limit = can_upload(user.id)
     if not allowed:
         raise HTTPException(
             status_code=403,
@@ -732,16 +745,16 @@ async def upload_replay(
 
     try:
         # Parse the replay (using the permanent path so filename matches)
-        parse_replay_file(permanent_path, DB_PATH)
+        parse_replay_file(permanent_path)
 
         # Get the newly created game
-        with get_connection(DB_PATH) as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, replay_file, game_date, game_length_seconds, map_name,
                        player1_name, player1_race, player2_name, player2_race, result
                 FROM games
-                WHERE replay_file = ?
+                WHERE replay_file = %s
             """, (unique_name,))
 
             row = cursor.fetchone()
@@ -765,17 +778,16 @@ async def upload_replay(
 
         # Atomically check quota and reserve upload slot (prevents TOCTOU race condition)
         allowed, new_uploads_used, new_uploads_limit = atomic_check_and_reserve_upload(
-            DB_PATH, user.id, game_id
+            user.id, game_id
         )
         if not allowed:
             # Race condition: another request used the last slot between pre-check and here.
             # Clean up the parsed game data.
-            with get_connection(DB_PATH) as conn:
+            with get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
-                cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
-                cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
-                conn.commit()
+                cursor.execute("DELETE FROM build_order_events WHERE game_id = %s", (game_id,))
+                cursor.execute("DELETE FROM snapshots WHERE game_id = %s", (game_id,))
+                cursor.execute("DELETE FROM games WHERE id = %s", (game_id,))
             permanent_path.unlink(missing_ok=True)
             raise HTTPException(
                 status_code=403,
@@ -832,23 +844,23 @@ async def get_games(
     Returns:
         List of games with pagination info
     """
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Base WHERE clause
-        where_clause = "(g.is_pro_replay = 1 OR u.user_id IS NOT NULL)"
+        where_clause = "(g.is_pro_replay = TRUE OR u.user_id IS NOT NULL)"
         params: list = [user.id]
 
         if is_pro is not None:
-            where_clause += " AND g.is_pro_replay = ?"
-            params.append(1 if is_pro else 0)
+            where_clause += " AND g.is_pro_replay = %s"
+            params.append(is_pro)
 
         if map_name:
-            where_clause += " AND g.map_name LIKE ?"
+            where_clause += " AND g.map_name LIKE %s"
             params.append(f"%{map_name}%")
 
         if race:
-            where_clause += " AND (g.player1_race = ? OR g.player2_race = ?)"
+            where_clause += " AND (g.player1_race = %s OR g.player2_race = %s)"
             params.append(race)
             params.append(race)
 
@@ -856,7 +868,7 @@ async def get_games(
         count_query = f"""
             SELECT COUNT(DISTINCT g.id)
             FROM games g
-            LEFT JOIN user_uploads u ON g.id = u.game_id AND u.user_id = ?
+            LEFT JOIN user_uploads u ON g.id = u.game_id AND u.user_id = %s
             WHERE {where_clause}
         """
         cursor.execute(count_query, params)
@@ -868,10 +880,10 @@ async def get_games(
                    g.player1_name, g.player1_race, g.player2_name, g.player2_race, g.result,
                    g.is_pro_replay
             FROM games g
-            LEFT JOIN user_uploads u ON g.id = u.game_id AND u.user_id = ?
+            LEFT JOIN user_uploads u ON g.id = u.game_id AND u.user_id = %s
             WHERE {where_clause}
             ORDER BY g.game_date DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
 
@@ -942,18 +954,18 @@ async def get_snapshots(
     # Verify user has access to this game
     verify_game_access(game_id, user)
 
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         query = f"""
             SELECT {SNAPSHOT_SELECT_COLUMNS}
             FROM snapshots
-            WHERE game_id = ?
+            WHERE game_id = %s
         """
         params: List[Any] = [game_id]
 
         if player_number:
-            query += " AND player_number = ?"
+            query += " AND player_number = %s"
             params.append(player_number)
 
         query += " ORDER BY game_time_seconds, player_number"
@@ -990,10 +1002,10 @@ async def get_similar_games(
 
     if use_ml and EMBEDDER is not None:
         # Use advanced ML-based similarity
-        similar = find_similar_games_ml(DB_PATH, game_id, limit, embedder=EMBEDDER)
+        similar = find_similar_games_ml(game_id, limit, embedder=EMBEDDER)
     else:
         # Fall back to basic similarity
-        similar = find_similar_games(DB_PATH, game_id, limit)
+        similar = find_similar_games(game_id, limit)
 
     return {"similar_games": similar}
 
@@ -1023,14 +1035,14 @@ async def get_snapshots_race_matched(
     verify_game_access(game_id, user)
     verify_game_access(user_game_id, user)
 
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Get user's race
         cursor.execute("""
             SELECT player1_race, player2_race
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (user_game_id,))
 
         user_game_row = cursor.fetchone()
@@ -1043,7 +1055,7 @@ async def get_snapshots_race_matched(
         cursor.execute("""
             SELECT player1_race, player2_race
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (game_id,))
 
         target_game_row = cursor.fetchone()
@@ -1063,7 +1075,7 @@ async def get_snapshots_race_matched(
             user_snaps_query = f"""
                 SELECT {SNAPSHOT_SELECT_COLUMNS}
                 FROM snapshots
-                WHERE game_id = ? AND player_number = ? AND game_time_seconds >= 300
+                WHERE game_id = %s AND player_number = %s AND game_time_seconds >= 300
                 ORDER BY game_time_seconds
                 LIMIT 1
             """
@@ -1078,7 +1090,7 @@ async def get_snapshots_race_matched(
                 cursor.execute(f"""
                     SELECT {SNAPSHOT_SELECT_COLUMNS}
                     FROM snapshots
-                    WHERE game_id = ? AND player_number = 1 AND game_time_seconds >= 300
+                    WHERE game_id = %s AND player_number = 1 AND game_time_seconds >= 300
                     ORDER BY game_time_seconds
                     LIMIT 1
                 """, (game_id,))
@@ -1088,7 +1100,7 @@ async def get_snapshots_race_matched(
                 cursor.execute(f"""
                     SELECT {SNAPSHOT_SELECT_COLUMNS}
                     FROM snapshots
-                    WHERE game_id = ? AND player_number = 2 AND game_time_seconds >= 300
+                    WHERE game_id = %s AND player_number = 2 AND game_time_seconds >= 300
                     ORDER BY game_time_seconds
                     LIMIT 1
                 """, (game_id,))
@@ -1112,7 +1124,7 @@ async def get_snapshots_race_matched(
         query = f"""
             SELECT {SNAPSHOT_SELECT_COLUMNS}
             FROM snapshots
-            WHERE game_id = ? AND player_number = ?
+            WHERE game_id = %s AND player_number = %s
             ORDER BY game_time_seconds
         """
 
@@ -1145,7 +1157,7 @@ async def compare_games(
     verify_game_access(game_id1, user)
     verify_game_access(game_id2, user)
 
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Get both games
@@ -1154,7 +1166,7 @@ async def compare_games(
                    player1_name, player1_race, player2_name, player2_race, result,
                    is_pro_replay
             FROM games
-            WHERE id IN (?, ?)
+            WHERE id IN (%s, %s)
         """, (game_id1, game_id2))
 
         rows = cursor.fetchall()
@@ -1182,7 +1194,7 @@ async def compare_games(
         cursor.execute(f"""
             SELECT {SNAPSHOT_SELECT_COLUMNS}
             FROM snapshots
-            WHERE game_id IN (?, ?)
+            WHERE game_id IN (%s, %s)
             ORDER BY game_id, game_time_seconds, player_number
         """, (game_id1, game_id2))
 
@@ -1225,22 +1237,22 @@ async def get_build_order(
     # Verify user has access to this game
     verify_game_access(game_id, user)
 
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         query = """
             SELECT event_type, item_name, game_time_seconds, player_number, is_milestone
             FROM build_order_events
-            WHERE game_id = ?
+            WHERE game_id = %s
         """
         params = [game_id]
 
         if player_number is not None:
-            query += " AND player_number = ?"
+            query += " AND player_number = %s"
             params.append(player_number)
 
         if milestones_only:
-            query += " AND is_milestone = 1"
+            query += " AND is_milestone = TRUE"
 
         query += " ORDER BY game_time_seconds ASC"
 
@@ -1293,14 +1305,14 @@ async def compare_build_orders(
     for pro_id in pro_ids:
         verify_game_access(pro_id, user)
 
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Get user build order events
         cursor.execute("""
             SELECT event_type, item_name, game_time_seconds, is_milestone
             FROM build_order_events
-            WHERE game_id = ? AND player_number = ?
+            WHERE game_id = %s AND player_number = %s
             ORDER BY game_time_seconds ASC
         """, (game_id, player_number))
 
@@ -1316,7 +1328,7 @@ async def compare_build_orders(
         # Get user's race from their game
         cursor.execute("""
             SELECT player1_race, player2_race
-            FROM games WHERE id = ?
+            FROM games WHERE id = %s
         """, (game_id,))
         user_game_row = cursor.fetchone()
         if not user_game_row:
@@ -1325,7 +1337,7 @@ async def compare_build_orders(
         user_race = user_game_row[0] if player_number == 1 else user_game_row[1]
 
         # Get all pro games' races in a single query (fixes N+1)
-        placeholders = ','.join('?' * len(pro_ids))
+        placeholders = ','.join(['%s'] * len(pro_ids))
         cursor.execute(f"""
             SELECT id, player1_race, player2_race
             FROM games
@@ -1350,7 +1362,7 @@ async def compare_build_orders(
         if pro_player_mapping:
             # Build WHERE clause for (game_id, player_number) pairs
             conditions = ' OR '.join(
-                f'(game_id = ? AND player_number = ?)'
+                f'(game_id = %s AND player_number = %s)'
                 for _ in pro_player_mapping
             )
             params = []
@@ -1406,22 +1418,22 @@ async def delete_game(game_id: int, user: User = Depends(require_auth)):
     Returns:
         Success message
     """
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Check if user owns this game (via user_uploads table)
         cursor.execute("""
-            SELECT 1 FROM user_uploads WHERE user_id = ? AND game_id = ?
+            SELECT 1 FROM user_uploads WHERE user_id = %s AND game_id = %s
         """, (user.id, game_id))
         if not cursor.fetchone():
             # Check if game exists at all
-            cursor.execute("SELECT 1 FROM games WHERE id = ?", (game_id,))
+            cursor.execute("SELECT 1 FROM games WHERE id = %s", (game_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Game not found")
             raise HTTPException(status_code=403, detail="You can only delete your own uploaded games")
 
         # Get replay file name before deleting
-        cursor.execute("SELECT replay_file FROM games WHERE id = ?", (game_id,))
+        cursor.execute("SELECT replay_file FROM games WHERE id = %s", (game_id,))
         row = cursor.fetchone()
 
         if not row:
@@ -1430,11 +1442,10 @@ async def delete_game(game_id: int, user: User = Depends(require_auth)):
         replay_file = row[0]
 
         # Delete from database — explicit child table deletes as belt-and-suspenders with CASCADE
-        cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
-        cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
-        cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
-        cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
-        conn.commit()
+        cursor.execute("DELETE FROM build_order_events WHERE game_id = %s", (game_id,))
+        cursor.execute("DELETE FROM snapshots WHERE game_id = %s", (game_id,))
+        cursor.execute("DELETE FROM user_uploads WHERE game_id = %s", (game_id,))
+        cursor.execute("DELETE FROM games WHERE id = %s", (game_id,))
 
     # Delete replay file from disk
     replay_path = UPLOAD_DIR / replay_file
@@ -1456,7 +1467,7 @@ async def delete_all_games(user: User = Depends(require_auth), keep_pro_replays:
     Returns:
         Success message with count of deleted games
     """
-    with get_connection(DB_PATH) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Only delete games that belong to the current user
@@ -1464,13 +1475,13 @@ async def delete_all_games(user: User = Depends(require_auth), keep_pro_replays:
             cursor.execute("""
                 SELECT g.id, g.replay_file FROM games g
                 JOIN user_uploads u ON g.id = u.game_id
-                WHERE u.user_id = ? AND g.is_pro_replay = 0
+                WHERE u.user_id = %s AND g.is_pro_replay = FALSE
             """, (user.id,))
         else:
             cursor.execute("""
                 SELECT g.id, g.replay_file FROM games g
                 JOIN user_uploads u ON g.id = u.game_id
-                WHERE u.user_id = ?
+                WHERE u.user_id = %s
             """, (user.id,))
 
         rows = cursor.fetchall()
@@ -1480,13 +1491,11 @@ async def delete_all_games(user: User = Depends(require_auth), keep_pro_replays:
 
         # Delete from database — explicit child table deletes as belt-and-suspenders with CASCADE
         if game_ids:
-            placeholders = ','.join('?' * len(game_ids))
+            placeholders = ','.join(['%s'] * len(game_ids))
             cursor.execute(f"DELETE FROM build_order_events WHERE game_id IN ({placeholders})", game_ids)
             cursor.execute(f"DELETE FROM snapshots WHERE game_id IN ({placeholders})", game_ids)
             cursor.execute(f"DELETE FROM user_uploads WHERE game_id IN ({placeholders})", game_ids)
             cursor.execute(f"DELETE FROM games WHERE id IN ({placeholders})", game_ids)
-
-        conn.commit()
 
     # Delete replay files from disk
     for replay_file in replay_files:

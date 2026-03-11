@@ -10,7 +10,7 @@ import json
 import logging
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Optional
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -369,7 +369,6 @@ class GameEmbedder:
     def get_embedding(
         self,
         game_id: int,
-        db_path: Path,
         player_number: int = 1,
         use_cache: bool = True
     ) -> np.ndarray:
@@ -378,7 +377,6 @@ class GameEmbedder:
 
         Args:
             game_id: Game ID
-            db_path: Path to database
             player_number: Player perspective (1 or 2)
             use_cache: Whether to use cached embeddings
 
@@ -391,11 +389,11 @@ class GameEmbedder:
             return self.embeddings_cache[cache_key]
 
         # Extract features from database
-        with get_connection(db_path) as conn:
+        with get_connection() as conn:
             cursor = conn.cursor()
 
             # Get game length
-            cursor.execute("SELECT game_length_seconds FROM games WHERE id = ?", (game_id,))
+            cursor.execute("SELECT game_length_seconds FROM games WHERE id = %s", (game_id,))
             result = cursor.fetchone()
             game_length = result[0] if result else 0
 
@@ -405,7 +403,7 @@ class GameEmbedder:
                        base_count, mineral_collection_rate, gas_collection_rate,
                        unspent_minerals, unspent_gas, units
                 FROM snapshots
-                WHERE game_id = ? AND player_number = ?
+                WHERE game_id = %s AND player_number = %s
                 ORDER BY game_time_seconds
             """, (game_id, player_number))
 
@@ -436,7 +434,6 @@ class GameEmbedder:
 
 
 def find_similar_games_ml(
-    db_path: Path,
     user_game_id: int,
     limit: int = 5,
     player_perspective: int = 1,
@@ -446,7 +443,6 @@ def find_similar_games_ml(
     Find similar games using ML embeddings.
 
     Args:
-        db_path: Path to database
         user_game_id: User's game ID
         limit: Number of similar games to return
         player_perspective: Which player to analyze (1 or 2)
@@ -456,17 +452,16 @@ def find_similar_games_ml(
         List of similar games with similarity scores
     """
     if embedder is None:
-        cache_path = db_path.parent / '.embeddings_cache.json'
-        embedder = GameEmbedder(cache_path=cache_path)
+        embedder = GameEmbedder()
 
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Get user game metadata
         cursor.execute("""
             SELECT game_length_seconds, map_name, player1_race, player2_race
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (user_game_id,))
 
         user_game = cursor.fetchone()
@@ -476,7 +471,7 @@ def find_similar_games_ml(
         user_length, user_map, user_p1_race, user_p2_race = user_game
 
         # Get user game embedding
-        user_embedding = embedder.get_embedding(user_game_id, db_path, player_perspective)
+        user_embedding = embedder.get_embedding(user_game_id, player_perspective)
 
         # Find pro games with exact matchup
         cursor.execute("""
@@ -485,9 +480,9 @@ def find_similar_games_ml(
             FROM games
             WHERE is_pro_replay = 1
               AND (
-                  (player1_race = ? AND player2_race = ?)
+                  (player1_race = %s AND player2_race = %s)
                   OR
-                  (player1_race = ? AND player2_race = ?)
+                  (player1_race = %s AND player2_race = %s)
               )
         """, (user_p1_race, user_p2_race, user_p2_race, user_p1_race))
 
@@ -511,7 +506,7 @@ def find_similar_games_ml(
             continue
 
         # Get pro game embedding
-        pro_embedding = embedder.get_embedding(pro_id, db_path, pro_player_num)
+        pro_embedding = embedder.get_embedding(pro_id, pro_player_num)
         pro_data.append((pro_embedding, {
             "pro_id": pro_id,
             "pro_length": pro_length,

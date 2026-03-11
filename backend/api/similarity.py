@@ -7,7 +7,6 @@ Algorithm considers:
 3. Map similarity (optional)
 4. Macro pattern similarity at key timestamps (3min, 6min, 9min)
 """
-from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import math
 
@@ -136,7 +135,6 @@ def find_closest_snapshot(snapshots: List[Tuple], target_time: int) -> Tuple:
 
 
 def find_similar_games(
-    db_path: Path,
     user_game_id: int,
     limit: int = 3,
     player_perspective: int = 1
@@ -145,7 +143,6 @@ def find_similar_games(
     Find the most similar pro games to a user's game.
 
     Args:
-        db_path: Path to SQLite database
         user_game_id: ID of the user's game
         limit: Number of similar games to return
         player_perspective: Which player to analyze (1 or 2)
@@ -153,14 +150,14 @@ def find_similar_games(
     Returns:
         List of similar games with similarity scores
     """
-    with get_connection(db_path) as conn:
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Get user's game metadata
         cursor.execute("""
             SELECT game_length_seconds, map_name, player1_race, player2_race
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (user_game_id,))
 
         user_game = cursor.fetchone()
@@ -174,7 +171,7 @@ def find_similar_games(
         cursor.execute("""
             SELECT game_time_seconds, worker_count, army_value_minerals, army_value_gas, base_count
             FROM snapshots
-            WHERE game_id = ? AND player_number = ?
+            WHERE game_id = %s AND player_number = %s
             ORDER BY game_time_seconds
         """, (user_game_id, player_perspective))
 
@@ -191,9 +188,9 @@ def find_similar_games(
             FROM games
             WHERE is_pro_replay = 1
               AND (
-                  (player1_race = ? AND player2_race = ?)
+                  (player1_race = %s AND player2_race = %s)
                   OR
-                  (player1_race = ? AND player2_race = ?)
+                  (player1_race = %s AND player2_race = %s)
               )
         """, (user_p1_race, user_p2_race, user_p2_race, user_p1_race))
 
@@ -213,7 +210,7 @@ def find_similar_games(
 
         # Batch-load ALL pro game snapshots in a single query (fixes N+1)
         pro_ids = list(pro_game_perspectives.keys())
-        placeholders = ','.join('?' * len(pro_ids))
+        placeholders = ','.join(['%s'] * len(pro_ids))
         cursor.execute(f"""
             SELECT game_id, player_number, game_time_seconds, worker_count,
                    army_value_minerals, army_value_gas, base_count

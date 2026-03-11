@@ -1,14 +1,20 @@
 """
 Tests for replay parser.
 """
-import sqlite3
-import tempfile
+import os
 from pathlib import Path
+
 import pytest
 import sc2reader
 
 from backend.src.parser import extract_game_metadata, generate_snapshots, parse_replay_file
-from backend.src.database import init_database
+
+
+# Tests that need a database require DATABASE_URL
+needs_db = pytest.mark.skipif(
+    not os.environ.get("DATABASE_URL"),
+    reason="DATABASE_URL not set — need a PostgreSQL instance for database tests",
+)
 
 
 def get_test_replay():
@@ -62,48 +68,56 @@ def test_snapshot_generation():
         assert time == (i + 1) * 5
 
 
+@needs_db
 def test_full_pipeline():
-    """Test complete replay parsing pipeline."""
+    """Test complete replay parsing pipeline with PostgreSQL."""
+    from backend.src.database import get_connection, init_database
+
     replay_path = get_test_replay()
 
-    # Create temporary database
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_db:
-        db_path = Path(tmp_db.name)
+    # Ensure tables exist
+    init_database()
 
-    try:
-        # Initialize database
-        init_database(db_path)
+    # Parse replay (now uses DATABASE_URL, no db_path parameter)
+    parse_replay_file(replay_path)
 
-        # Parse replay
-        parse_replay_file(replay_path, db_path)
-
-        # Verify database contents
-        conn = sqlite3.connect(db_path)
+    # Verify database contents
+    with get_connection() as conn:
         cursor = conn.cursor()
 
         # Check game was inserted
-        game_count = cursor.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM games WHERE replay_file = %s",
+            (replay_path.name,),
+        )
+        game_count = cursor.fetchone()[0]
         assert game_count == 1
 
         # Check snapshots were inserted
-        snapshot_count = cursor.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+        cursor.execute(
+            "SELECT COUNT(*) FROM snapshots s JOIN games g ON s.game_id = g.id WHERE g.replay_file = %s",
+            (replay_path.name,),
+        )
+        snapshot_count = cursor.fetchone()[0]
         assert snapshot_count > 0
 
         # Check we have snapshots for both players
-        player_counts = cursor.execute("""
+        cursor.execute("""
             SELECT player_number, COUNT(*)
-            FROM snapshots
+            FROM snapshots s JOIN games g ON s.game_id = g.id
+            WHERE g.replay_file = %s
             GROUP BY player_number
-        """).fetchall()
+        """, (replay_path.name,))
+        player_counts = cursor.fetchall()
 
         assert len(player_counts) == 2
         assert player_counts[0][1] == player_counts[1][1]  # Same count for both players
 
-        conn.close()
-
-    finally:
-        # Cleanup
-        db_path.unlink(missing_ok=True)
+        # Clean up: remove the test game so the test is repeatable
+        cursor.execute(
+            "DELETE FROM games WHERE replay_file = %s",
+            (replay_path.name,),
+        )
 
 
 def test_reject_non_1v1():

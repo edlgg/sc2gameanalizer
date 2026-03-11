@@ -1,13 +1,14 @@
 """
 Replay parsing orchestration.
 """
-import sqlite3
+import psycopg2
 from pathlib import Path
 from typing import Dict, Any, List
 import sc2reader
 
 from backend.src.database import (
-    get_connection,
+    get_connection_direct,
+    return_connection,
     insert_game,
     insert_snapshots,
     insert_build_order_events,
@@ -53,7 +54,7 @@ def _validate_replay(replay) -> float:
     return game_length_seconds
 
 
-def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
+def reparse_replay_file(replay_path: Path) -> None:
     """
     Delete existing game data and reparse a replay file.
     The delete and re-insert are wrapped in a single transaction so that
@@ -61,7 +62,6 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
 
     Args:
         replay_path: Path to the SC2Replay file
-        db_path: Path to the SQLite database
 
     Raises:
         ValueError: If replay is not valid (not 1v1, too short, etc.)
@@ -75,22 +75,22 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
     snapshots = generate_snapshots(replay)
 
     # Delete old data and insert new data in a single transaction
-    conn = get_connection(db_path)
+    conn = get_connection_direct()
     try:
         cursor = conn.cursor()
 
         # Delete existing game data if it exists
-        cursor.execute("SELECT id FROM games WHERE replay_file = ?", (replay_path.name,))
+        cursor.execute("SELECT id FROM games WHERE replay_file = %s", (replay_path.name,))
         result = cursor.fetchone()
         if result:
             game_id = result[0]
-            cursor.execute("DELETE FROM build_order_events WHERE game_id = ?", (game_id,))
-            cursor.execute("DELETE FROM snapshots WHERE game_id = ?", (game_id,))
+            cursor.execute("DELETE FROM build_order_events WHERE game_id = %s", (game_id,))
+            cursor.execute("DELETE FROM snapshots WHERE game_id = %s", (game_id,))
             try:
-                cursor.execute("DELETE FROM user_uploads WHERE game_id = ?", (game_id,))
-            except sqlite3.OperationalError:
-                pass  # user_uploads table may not exist in batch processing contexts
-            cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+                cursor.execute("DELETE FROM user_uploads WHERE game_id = %s", (game_id,))
+            except psycopg2.errors.UndefinedTable:
+                conn.rollback()  # Clear the error state
+            cursor.execute("DELETE FROM games WHERE id = %s", (game_id,))
             print(f"Deleted existing game data for {replay_path.name}")
 
         # Insert new data (no intermediate commits)
@@ -112,10 +112,10 @@ def reparse_replay_file(replay_path: Path, db_path: Path) -> None:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        return_connection(conn)
 
 
-def parse_replay_file(replay_path: Path, db_path: Path) -> None:
+def parse_replay_file(replay_path: Path) -> None:
     """
     Parse a replay file and store snapshots in the database.
     All inserts are wrapped in a single transaction — on failure,
@@ -123,7 +123,6 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
 
     Args:
         replay_path: Path to the SC2Replay file
-        db_path: Path to the SQLite database
 
     Raises:
         ValueError: If replay is not valid (not 1v1, too short, etc.)
@@ -139,7 +138,7 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
     snapshots = generate_snapshots(replay)
 
     # Write to database in a single transaction
-    conn = get_connection(db_path)
+    conn = get_connection_direct()
     try:
         game_id = insert_game(conn, game_data, commit=False)
         insert_snapshots(conn, game_id, snapshots, commit=False)
@@ -166,7 +165,7 @@ def parse_replay_file(replay_path: Path, db_path: Path) -> None:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        return_connection(conn)
 
 
 def extract_game_metadata(replay, replay_path: Path) -> Dict[str, Any]:
