@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 
-WORKDIR /app
+WORKDIR /app/backend
 
 # Install system dependencies for psycopg2
 RUN apt-get update && \
@@ -18,6 +18,9 @@ RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY . .
+
+# Set PYTHONPATH so "from backend.src..." imports resolve
+ENV PYTHONPATH=/app
 
 EXPOSE 8000
 
