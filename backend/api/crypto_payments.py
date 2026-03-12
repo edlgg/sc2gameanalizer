@@ -22,9 +22,12 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _parse_datetime(dt_str: str) -> datetime:
-    """Parse ISO datetime string and ensure it's timezone-aware (UTC)."""
-    dt = datetime.fromisoformat(dt_str)
+def _parse_datetime(dt_val) -> datetime:
+    """Parse a datetime value (str or datetime) and ensure it's timezone-aware (UTC)."""
+    if isinstance(dt_val, str):
+        dt = datetime.fromisoformat(dt_val)
+    else:
+        dt = dt_val
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
@@ -501,7 +504,7 @@ def verify_payment(payment_id: int) -> Tuple[bool, str]:
         if status == "confirmed":
             return True, "Payment already confirmed"
 
-        expires_dt = _parse_datetime(expires_at) if isinstance(expires_at, str) else expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
+        expires_dt = _parse_datetime(expires_at)
         if status == "expired" or expires_dt < _utc_now():
             cursor.execute("""
                 UPDATE pending_payments SET status = 'expired' WHERE id = %s
