@@ -270,14 +270,16 @@ async def startup_event():
     """Initialize database on startup if it doesn't exist."""
     global EMBEDDER
 
-    init_pool()
-    init_database()
-
-    # Initialize user tables (safe to call multiple times)
-    init_user_tables()
-
-    # Initialize payment tables
-    init_payment_tables()
+    if os.environ.get("DATABASE_URL"):
+        try:
+            init_pool()
+            init_database()
+            init_user_tables()
+            init_payment_tables()
+        except Exception as e:
+            logger.warning(f"Database initialization failed: {e}")
+    else:
+        logger.warning("DATABASE_URL not set — running without database")
 
     # Initialize ML embedder with cache
     cache_path = Path(__file__).parent.parent / "data" / ".embeddings_cache.json"
